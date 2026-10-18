@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { workoutAt } from './history.js'
 import { muscleBalanceWindow } from './muscles.js'
 
@@ -86,6 +86,13 @@ describe('nothing re-implements the rule', () => {
    which is 20:00 the previous day in New York, so a date-only workout logged today was already
    four hours old to every window filter and could fall out of one early. */
 describe('a date-only workout against a window edge', () => {
+  const TZ = process.env.TZ
+  beforeAll(() => { process.env.TZ = 'America/New_York' })
+  afterAll(() => {
+    if (TZ === undefined) delete process.env.TZ
+    else process.env.TZ = TZ
+  })
+
   it('stays inside a window that a UTC-midnight parse would push it out of', () => {
     const iso = '2026-09-22'
     // A window that opened at 06:00 local on the workout's own day.

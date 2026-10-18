@@ -26,7 +26,7 @@ function mountTopSheet() {
 const button = (host, text) => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === text)
 
 const workout = (entries, extra = {}) => ({
-  id: 'w1', d: '2026-09-15', start: Date.UTC(2026, 8, 15, 17), end: Date.UTC(2026, 8, 15, 18), name: 'Push',
+  id: 'w1', d: '2026-09-15', start: new Date(2026, 8, 15, 17).getTime(), end: new Date(2026, 8, 15, 18).getTime(), name: 'Push',
   vol: 0, prs: [], routineIds: [], entries, ...extra,
 })
 const done = (w, r, more = {}) => ({ w, r, done: true, ...more })
@@ -165,7 +165,7 @@ describe('export as .fit', () => {
     const host = mountTopSheet()
     await act(async () => { button(host, 'Export as .fit file').click() })
     expect(clicked).toHaveLength(1)
-    expect(clicked[0]).toMatch(/^opengym-2026-09-15-\d{4}\.fit$/)
+    expect(clicked[0]).toBe('opengym-2026-09-15-1700.fit')
     const bytes = new Uint8Array(await blobs[0].arrayBuffer())
     expect(String.fromCharCode(...bytes.slice(8, 12))).toBe('.FIT')
     expect(toast).toHaveBeenCalledWith('Saved. Garmin Connect can take it from here.')

@@ -40,7 +40,8 @@ from aiohttp import web
 MAX_BODY = 2 * 1024 * 1024          # ≥ 1 MiB,覆盖 MAX_PAYLOAD_CHARS(300k)+ system prompt
 MAX_MESSAGES = 8                     # openGym 实际发 2 条(system+user),留修复余量
 MAX_TOKENS_CAP = 32000
-UPSTREAM_TIMEOUT_S = 290             # openGym 调用预算 5min,留 10s 给传输
+# 与 openGym 的 COACH_JOB_TIMEOUT_MS 协调:bridge 比它小 ~10s,留给传输/收尾
+UPSTREAM_TIMEOUT_S = int(os.environ.get("GYM_UPSTREAM_TIMEOUT_S", "290"))
 MODELS_PROBE_TIMEOUT_S = 5
 MAX_CONCURRENCY = 2
 IDEMPOTENCY_KEEP = 200

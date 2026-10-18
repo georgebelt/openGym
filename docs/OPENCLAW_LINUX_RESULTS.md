@@ -152,3 +152,24 @@ profileUid `R0e1jddEojjLXL6u`、model `openclaw/gym-coach`;token 经管理员表
 提案引擎按设计零工具零记忆、输出受合同约束,只能答"基于数据的计划调整";
 自由问答的入口是 OpenClaw 对话模式的 gym-coach(带只读 MCP)。建议 Mac 评估在
 app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧不改 api/web。
+
+## 12. L1 收口:验收脚本对齐生产 fetch(2026-10-18 追加)
+
+- `coach_real_model.mjs` 已注入生产同款 `fetchFor(TIMEOUT_MS)`(api/coach/node-fetch.js),
+  `TIMEOUT_MS` 默认改 480000(=本机 COACH_JOB_TIMEOUT_MS);旧 290/300s 注释已更正为
+  "bridge 默认 290s / 本机部署 470s"。确认此前"重试在 300.0s 被断"正是 Node 全局 fetch
+  (undici)的 ~300s 响应头硬超时,属于脚本与生产不一致,生产 jobs.js 本就用 fetchFor。
+- 传输验收 `deploy/linux/acceptance/fetch_budget_check.mjs`(独立端口 18899 假上游,
+  不占生产 bridge 18890、不消耗真实模型),`node fetch_budget_check.mjs` 全量结果 **PASS**:
+  - A 响应头延迟 310s(>300s、<480s 预算)→ 正常完成,310.0s 收到合法 JSON;
+  - B 延迟 75s、预算 60s(fetchFor 下限)→ 60.0s adapter 超时,假上游观察到连接在
+    应答前被关闭(终止,非悬挂);
+  - C 主动 AbortController 取消@3s → 3.0s 终止,上游连接同样确认关闭。
+  (FAST=1 冒烟模式亦 PASS,供快速回归。)
+- 当前部署配置:**openGym API `COACH_JOB_TIMEOUT_MS=480000`,bridge
+  `GYM_UPSTREAM_TIMEOUT_S=470`(默认 290)**。Mac 本轮测试结果见
+  OPENCLAW_MAC_VALIDATION.md(fixture 日历化后 api 全绿、CI 双时区)。
+- 升级部署 SHA 将在 main 合并后的部署窗口补记(Git 合并与服务器部署分离)。
+
+**L2(手机取消/撤回)仍待用户真机操作**,Linux 侧核验点已就绪:job 状态语义、
+bridge 上游终止(journal 的 client_abort/状态行)、撤回后新请求被拒三项。

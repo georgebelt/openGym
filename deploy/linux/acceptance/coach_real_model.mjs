@@ -19,6 +19,7 @@ const RESULTS = path.join(HERE, 'results-coach.json');
 const { tempData, sampleState } = await import('../../../api/test/helpers.mjs');
 tempData();
 const { handleFor } = await import('../../../api/coach/handle.js');
+const { fetchFor } = await import('../../../api/coach/node-fetch.js');
 const payloadLib = await import('../../../api/coach/core/payload.js');
 const { runPipeline } = await import('../../../api/coach/core/pipeline.js');
 const adapter = (await import('../../../api/coach/adapters/openclaw.js')).default;
@@ -35,10 +36,12 @@ const cfg = {
 };
 const env = { OPENCLAW_COACH_TOKEN: process.env.OPENCLAW_COACH_TOKEN };
 const MODEL = 'openclaw/gym-coach';
-// Production's own job budget (api/coach/jobs.js TIMEOUT_MS default, 5 min). The bridge cuts
-// an upstream call at 290s, so with this the bridge's own 504 still reaches the adapter. A
-// 240s budget proved tighter than production: a real create ran past it twice.
-const TIMEOUT_MS = +process.env.TIMEOUT_MS || 470000;
+// 与生产一致:api/coach/jobs.js 的 COACH_JOB_TIMEOUT_MS(本机部署 480000ms)。
+// bridge 的上游超时是 GYM_UPSTREAM_TIMEOUT_S(默认 290s,本机部署 470s),
+// 比业务预算小 ~10s,这样 bridge 的 504 仍能先于 adapter 超时到达。
+// 必须注入生产同款 fetchFor:Node 全局 fetch(undici 默认)有 ~300s 响应头
+// 硬超时,会在预算之前掐断长任务 —— 生产 jobs.js 用 fetchFor,这里保持一致。
+const TIMEOUT_MS = +process.env.TIMEOUT_MS || 480000;
 const MAX_TOKENS = +process.env.MAX_TOKENS || 24000;
 
 /* ---------- synthetic but legal state: recent dumbbell training relative to today ---------- */
@@ -85,7 +88,7 @@ function lowerWorkout(id, ago, note) {
 }
 
 // DAYS=2 shrinks the asked-for plan (and so the model's output) — a probe for whether a
-// create fits the bridge's 290s upstream window at all; the scenario stays legal either way.
+// create fits the bridge's upstream window (default 290s, deployed 470s); the scenario stays legal either way.
 const DAYS = [2, 3].includes(+process.env.DAYS) ? +process.env.DAYS : 3;
 const PROFILE = {
   goal: 'muscle', experience: 'returning', daysPerWeek: DAYS, sessionMin: 60,
@@ -189,7 +192,7 @@ async function runTask(label, kind, opts) {
   const counting = { ...adapter, invoke: a => (invocations++, adapter.invoke(a)) };
   const once = () => { invocations = 0; return runPipeline({
     adapter: counting, cfg, kind, payload, model: MODEL, timeoutMs: TIMEOUT_MS,
-    invokeOpts: { env, maxTokens: MAX_TOKENS }
+    invokeOpts: { env, maxTokens: MAX_TOKENS, fetch: fetchFor(TIMEOUT_MS) }
   }); };
 
   const t0 = Date.now();
@@ -204,7 +207,8 @@ async function runTask(label, kind, opts) {
   }
   const ms = Date.now() - t0;
 
-  // "Hit the 290s wall": our own 300s deadline fired, or the bridge's 504 upstream_timeout came back.
+  // 撞超时墙:业务预算(TIMEOUT_MS)耗尽,或 bridge 的 504 upstream_timeout 返回
+  // (bridge 默认 290s / 本机部署 470s)。
   const hit290 = (!attempt.ok && attempt.errorClass === 'timeout')
     || /^504 /.test(String(attempt.detail || ''));
   const entry = {

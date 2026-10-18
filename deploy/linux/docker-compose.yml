@@ -11,6 +11,8 @@ name: opengym
 services:
   api:
     image: opengym-api:linux
+    # 以宿主 uid 运行:数据文件归 wuzi,宿主侧 MCP 才能只读访问;也避免容器 root 写宿主盘
+    user: "1000:1000"
     build:
       context: ../../api
       target: ${API_TARGET:-default}

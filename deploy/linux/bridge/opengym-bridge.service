@@ -12,6 +12,7 @@ EnvironmentFile=%h/.config/opengym-bridge/env
 ExecStart=%h/openGym/deploy/linux/bridge/.venv/bin/python3 gym_bridge.py
 Restart=on-failure
 RestartSec=3
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

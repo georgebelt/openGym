@@ -1,0 +1,68 @@
+{
+  "ranAt": "2026-10-18T08:24:00.600Z",
+  "model": "openclaw/gym-coach",
+  "bridge": "http://127.0.0.1:18890",
+  "results": [
+    {
+      "kind": "create",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 148740,
+      "cjk": true,
+      "sample": "按你定下的每周2练、周一/周三训练安排,改成两天全身训练而不是原来的三天上下肢分化,这样频率不会因为天数变少而丢失。两天的动作都以你偏好的哑铃复合动作为主(深蹲、推、拉),周三换个角度(弓步、上斜推、单臂划船)避免重复刺激又不增加器械需求。",
+      "idsOk": true,
+      "idsChecked": 14,
+      "planDays": 2,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false
+    },
+    {
+      "kind": "review",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 117107,
+      "cjk": true,
+      "sample": "最近三周半你完成了全部10次计划内训练,下肢的深蹲和罗马尼亚硬拉进展稳定、没有停滞。但卧推在6次训练里有4次停滞,站姿哑铃推举更是6次全部停滞,10月10日那次两个推举动作都明显掉重,同一天你也提到肩膀前侧有点紧;平板支撑最后一组连续4次都",
+      "idsOk": true,
+      "idsChecked": 6,
+      "planDays": 3,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false
+    },
+    {
+      "kind": "refine",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 425845,
+      "cjk": true,
+      "sample": "周一全身训练A保持不变:深蹲、卧推、俯身划船、站姿推举、罗马尼亚硬拉和平板支撑,覆盖主要肌群,硬拉保持中等重量照顾你的下背部。周三改成了拉力日,全部换成哑铃背部和肱二头肌动作——单臂俯身划船、卧姿反握划船、俯卧拉背、耸肩、哑铃弯举——并优先",
+      "idsOk": true,
+      "idsChecked": 13,
+      "planDays": 2,
+      "transportRetries": 1,
+      "hitBridgeTimeout": true
+    },
+    {
+      "kind": "debrief",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 39276,
+      "cjk": true,
+      "sample": "这次下肢日完成情况稳定:高脚杯深蹲24kg×10三组全部达标(RPE 8/8.5/9),罗马尼亚硬拉30kg×8三组全部达标(RPE 8/8.5/9),两者数据与最近三次训练完全一致。负重平板支撑前两组撑满45秒,第三组只到40秒,未达目标",
+      "idsOk": true,
+      "idsChecked": 0,
+      "planDays": 3,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false
+    }
+  ],
+  "findings": [
+    "整周(3天)create 在真实 agent 上多次撞 bridge 290s 上限:4 次 504 upstream_timeout(其中 2 次为无并发干扰的干净样本),另有并行观察到一次 287.7s 擦线成功;2 次早期尝试在 240s 客户端预算下也未完成。时延与输出规模成正比(debrief 39s < review 117s < 2天create 149s < 3天create >290s),是真实时延特性,非 bug。",
+    "refine 首次调用同样撞 290s(504),重试一次后 130s 内完成——同一调用的时延方差很大。",
+    "幂等注意:bridge 以 request id 幂等去重,openGym adapter 每次 invoke 均生成新 uuid,重试即新执行,无重放污染。"
+  ]
+}

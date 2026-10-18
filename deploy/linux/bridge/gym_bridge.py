@@ -294,8 +294,10 @@ def main():
     b = GymBridge()
     print(f"[bridge] 启动 {hosts}:{port} persona={b.allowed_model} "
           f"upstream={b.upstream_agent}", flush=True)
+    # handler_cancellation:aiohttp 3.9+ 默认客户端断开不取消 handler;
+    # 必须打开,断开才会沿 CancelledError 关掉上游 SSE(= 真正中止生成)
     web.run_app(b.build(), host=hosts, port=port, print=None,
-                access_log=None)
+                access_log=None, handler_cancellation=True)
 
 
 if __name__ == "__main__":

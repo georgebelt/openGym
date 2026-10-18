@@ -36,6 +36,13 @@ restricted token, then keep persona `openclaw/gym-coach`, **List models**, and *
 The gateway token and the underlying LLM configuration stay on Linux. This provider is
 server-only; it is not offered in the phone's direct API-key picker.
 
+With this deployment, use the app's Coach to create, review or adjust a plan, or debrief a
+workout. Its notes box adds context to that task; suggestions become changes only after you
+approve them. For free-form training questions, use the **gym-coach** conversation in OpenClaw.
+It can read your synced training through the read-only MCP tools; it cannot apply changes to
+your openGym plan. Exercise instructions and demonstrations are available in the app's exercise
+library. These two entry points have separate sessions.
+
 A model on your own LAN is the compatible endpoint with no key: point it at
 `http://ollama.lan:11434` and pick a model from the list it serves. That is the whole
 configuration. (On the server, that is. The phone app's own-key Coach needs `https://`; see

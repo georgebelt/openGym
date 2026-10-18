@@ -3,7 +3,38 @@
 日期：2026-10-18。改动前基线：`0299cf5c41268b1715ac0374533f779377911119`。
 环境：macOS、Node 22.23.1；主机时区 Asia/Shanghai。
 
-## 已通过
+## 集成复验（2026-10-18）
+
+基于 Linux `eae02053`，在 Mac 分支 `codex/opengym-integration` 完成。
+工作范围与 Linux 剩余验收见 [协作交接](OPENCLAW_COLLABORATION.md)。
+
+| 检查 | 结果 |
+| --- | --- |
+| `npm test`（api） | **607/607**；引入上游 `0526d657` 后，旧日期导致的 10 项失败已消除 |
+| `TZ=UTC npm test -- --maxWorkers=4`（frontend） | **5061/5061**，402 个文件 |
+| `TZ=Asia/Shanghai npm test -- --maxWorkers=4`（frontend） | **5061/5061**，402 个文件 |
+| `TZ=UTC npm test`（mcp） | **95/95** |
+| `TZ=Asia/Shanghai npm test`（mcp） | **95/95**；旧的 UTC 中午 fixture 导致的 5 项失败已消除 |
+| `node scripts/build-api-docs.mjs --check` | 通过；已重生成 `website/api.html` |
+| `node scripts/build-coach-assets.mjs --check` | 通过 |
+| `node api/scripts/check-core-loadable.mjs`、MCP `npm run check:node-loadable` | 通过 |
+| 前端 `npm run build`、`check-locales.mjs`、`check-source-strings.mjs` | 通过；18 个语言包，1770 个源码翻译键 |
+| 前端 `npm run test:fatigue-probe` | 108000 次恢复比较、1800 次历史删除比较通过 |
+| `git diff --check` | 通过 |
+
+全量前端复验另外暴露并修正了三个既有时区测试假设：demoSeed 的 UTC 中午、
+FIT fixture 的 UTC 开始时间与本地日期不一致、纽约日期窗口测试未指定时区。
+只调整测试数据/时区，未更改生产训练逻辑；前端及 MCP 的 CI 增加两时区矩阵。
+测试仍有 MaxListeners 提示，构建仍有既有 chunk/import 提示，退出状态均为 0。
+
+Linux 的 bridge 8 项合同测试在此前 Mac 审查中通过，本轮未改 bridge，未重复运行。
+Docker 构建和真实服务验收继续由 Linux 负责，情况见
+[Linux 验收记录](OPENCLAW_LINUX_RESULTS.md)。本记录不把代码单测视为手机撤回/取消
+或超过 300 秒真实传输已通过。此次无客户端运行时代码变化，不重打 IPA。
+
+以下保留初次接入时的历史记录；其中日期测试失败和 Linux 尚未实施的状态不代表当前状态。
+
+## 初次接入已通过
 
 - `node --test api/test/openclaw.test.js`：11 个测试。
   验证请求合同、每次调用独立 ID、账号绑定、凭证轮换保留绑定、另一账号在入队前被拒绝、
@@ -21,7 +52,7 @@
   这是表单验收，不是真实 OpenClaw 或 iPhone 联调。
 - Glass 工作区保持干净，只读取了文档与适配器源码。
 
-## 基线已有失败
+## 初次接入的基线失败（已在上述集成复验修正）
 
 全量 API：606 个测试，596 通过、10 失败（当时 OpenClaw 文件含 10 个测试）。
 从上述改动前 commit 导出隔离副本后，以下五个测试文件复现完全相同的 10 个失败，
@@ -39,7 +70,7 @@ MCP 默认使用本机 Asia/Shanghai 时，4 个既有断言失败：fixture 把
 `2026-07-27T12:00:00Z`，本地时间为 20:00，demoSeed 会生成当天已经完成的训练；
 测试却预期当天尚未训练。相同源码在 UTC 全部通过。本次不修改训练逻辑或这些旧 fixture。
 
-## 未验证及 Linux 待完成
+## 初次接入时未验证及 Linux 待完成（历史记录）
 
 - Docker 默认镜像两次构建均在拉取 `node:22-alpine` 的元数据阶段失败：
   Docker Hub `auth.docker.io` TLS handshake timeout，尚未执行项目构建步骤。

@@ -1,7 +1,8 @@
 # Linux 交接：openGym + OpenClaw gym-coach
 
-状态：Mac 端已实现专用 provider 和测试；Linux 服务、真实模型和 iPhone 联调尚待执行。
-本文是给 Linux coding agent 的实施需求，不代表这些服务已经部署。
+本文保留最初给 Linux coding agent 的实施需求。当前部署及实测情况见
+[Linux 验收记录](OPENCLAW_LINUX_RESULTS.md)；双方工作范围、集成流程和剩余任务以
+[Mac / Linux 分工与交接](OPENCLAW_COLLABORATION.md) 为准。
 
 ## 1. 已确认的目标和边界
 

@@ -130,3 +130,18 @@ List models/Test 亦经容器网络实测通过)。
 Admin → AI Coach:provider `openclaw`、Base URL `http://172.21.0.1:18890`、
 profileUid `R0e1jddEojjLXL6u`、model `openclaw/gym-coach`;token 经管理员表单保存
 (后端加密存储),未手写 coach.json。headers 字段在该 provider 下禁用(由 bridge 管理)。
+
+## 10. 手机侧验收进展与真实事故记录(2026-10-18 追加)
+
+- 手机配对 ✅(audit:pair.create/pair.ok)、数据同步 ✅(state-<uid>.json 落盘)、
+  **真实 create 提案 ✅ 且已被用户应用**(coach history:ready → applied)。
+- **真实事故:review 失败 `unusable`**。根因:模型在 `reading` 字符串里写了未转义的
+  英文双引号(引用用户那条"自由训练"记录的名字),两轮(首轮还带 markdown 围栏)
+  均为非法 JSON,修复轮未能纠正。合成测试未踩中(数据里没有诱发引号的名字)。
+- 处置(Linux 职权内,未改 api/):`gym-proposal-soul v1.1` 加 JSON 合法性硬规则
+  (字符串值内禁英文双引号,引用名称用「」,输出前自检可被 JSON.parse)。
+  回归:用"自由训练"诱发场景经真实模型复测 **3/3 合法 JSON**(全部改用「」)。
+- 给 Mac 的上游观察(非 Linux 修改):① 首轮 markdown 围栏 + 内嵌引号时,
+  `extractJSON` 的错误串只有 "the answer was not JSON",修复轮喂回后模型重复同错;
+  若 repair 提示能指出"字符串内未转义引号"类具体位置,修复成功率应更高。
+  ② 可考虑 extractJSON 容忍 ```json 围栏剥离。均为建议,由 Mac 侧决定。

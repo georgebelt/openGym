@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-18T08:24:00.600Z",
+  "ranAt": "2026-10-18T10:32:35.838Z",
   "model": "openclaw/gym-coach",
   "bridge": "http://127.0.0.1:18890",
   "results": [
@@ -8,14 +8,14 @@
       "ok": true,
       "nochange": false,
       "repairRound": false,
-      "ms": 148740,
-      "cjk": true,
-      "sample": "按你定下的每周2练、周一/周三训练安排,改成两天全身训练而不是原来的三天上下肢分化,这样频率不会因为天数变少而丢失。两天的动作都以你偏好的哑铃复合动作为主(深蹲、推、拉),周三换个角度(弓步、上斜推、单臂划船)避免重复刺激又不增加器械需求。",
-      "idsOk": true,
-      "idsChecked": 14,
-      "planDays": 2,
       "transportRetries": 0,
-      "hitBridgeTimeout": false
+      "hitBridgeTimeout": false,
+      "planDays": 3,
+      "ms": 211289,
+      "cjk": true,
+      "sample": "三天分为上肢推拉、下肢核心、全身强化,延续你过去10次训练已经建立起来的卧推、划船、推举、山羊挺身深蹲和罗马尼亚硬拉这几个核心动作。新增几个徒手和单侧动作,一方面补足背部拉力与手臂的训练量,一方面在你的哑铃已经练到24kg单只上限的情况下,",
+      "idsOk": true,
+      "idsChecked": 18
     },
     {
       "kind": "review",
@@ -59,10 +59,5 @@
       "transportRetries": 0,
       "hitBridgeTimeout": false
     }
-  ],
-  "findings": [
-    "整周(3天)create 在真实 agent 上多次撞 bridge 290s 上限:4 次 504 upstream_timeout(其中 2 次为无并发干扰的干净样本),另有并行观察到一次 287.7s 擦线成功;2 次早期尝试在 240s 客户端预算下也未完成。时延与输出规模成正比(debrief 39s < review 117s < 2天create 149s < 3天create >290s),是真实时延特性,非 bug。",
-    "refine 首次调用同样撞 290s(504),重试一次后 130s 内完成——同一调用的时延方差很大。",
-    "幂等注意:bridge 以 request id 幂等去重,openGym adapter 每次 invoke 均生成新 uuid,重试即新执行,无重放污染。"
   ]
 }

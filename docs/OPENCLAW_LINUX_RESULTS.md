@@ -94,11 +94,15 @@ refine 语义正确("把周三改成拉力日"→ 周三换划船/弯举类,周�
 Admin Test 形状经全链路**精确**返回 `{"coach_contract":1,"ok":true}`(2.6s;用户 UI 的
 List models/Test 亦经容器网络实测通过)。
 
-**重要发现(时延,非 bug)**:提案耗时与输出规模近似成正比(39s→117s→149s→>290s)。
-**整周(3 天以上)create 在 sonnet-5 上多次撞 290s 上限**(4 次 504,一次 287.7s 擦线成功);
-同请求方差大(refine 首跑撞墙、重试 130s)。openGym 预算 300s 对整周 create 很紧。
-选项(由用户/Mac 决定,Linux 未擅动):① 接受偶发超时由用户重试;② 为 gym 双 agent 换
-更快模型(用户 Bedrock 账号内即可,如 haiku 4.5,质量需另验);③ Mac 侧评估提案拆分。
+**重要发现与解决(复验后更正)**:整周 create 最初多次失败,根因有二,均已定位:
+① **输出 token 上限**——3 天计划 JSON 超过 16000 output tokens,`finish_reason=length`
+被截断(一次 184s 跑完但被切);② 预算紧。处置:openGym 侧 `COACH_JOB_TIMEOUT_MS=480000`
+(自带 env,下限 60s)+ bridge `GYM_UPSTREAM_TIMEOUT_S=470`(新增 env,默认仍 290),
+**管理员需在 Admin → AI Coach 设 `maxOutputTokens=24000`**(bridge 硬上限 32000)。
+复验:**3 天 create 在 24k tokens 下 211s 完整通过**(验证器一次过、中文、18 处 id 全对)。
+剩余事实:提案耗时与输出规模近似成正比(39s→117s→211s),同请求方差大
+(refine 首跑撞旧上限、重试 130s)。若想更快,可换更快模型(用户 Bedrock 账号内即可,
+质量需另验)——由用户决定,Linux 未擅动。
 
 修复轮真实样本:四任务均一次通过,修复轮未被真实触发(管线与单测已覆盖该路径,如实注明)。
 

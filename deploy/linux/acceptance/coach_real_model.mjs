@@ -38,8 +38,8 @@ const MODEL = 'openclaw/gym-coach';
 // Production's own job budget (api/coach/jobs.js TIMEOUT_MS default, 5 min). The bridge cuts
 // an upstream call at 290s, so with this the bridge's own 504 still reaches the adapter. A
 // 240s budget proved tighter than production: a real create ran past it twice.
-const TIMEOUT_MS = 300000;
-const MAX_TOKENS = 16000;
+const TIMEOUT_MS = +process.env.TIMEOUT_MS || 470000;
+const MAX_TOKENS = +process.env.MAX_TOKENS || 24000;
 
 /* ---------- synthetic but legal state: recent dumbbell training relative to today ---------- */
 const iso = d => d.toISOString().slice(0, 10);

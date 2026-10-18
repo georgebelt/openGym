@@ -332,6 +332,24 @@ A signed build (TestFlight, App Store) would additionally need an Apple Develope
 membership, the distribution certificate and profile as protected file variables, and an
 `-exportArchive` step — none of that is set up.
 
+#### Build an unsigned IPA locally
+
+On a Mac with Node, Xcode (including the iOS SDK) and CocoaPods installed, run from the
+repository root:
+
+```sh
+bash scripts/build-ios-ipa.sh
+```
+
+The script builds the mobile frontend, bundles the repository's exercise images and animations,
+syncs the iOS dependencies, and archives a Release build for physical devices with code signing
+disabled. It packages `Payload/App.app` into an IPA, ready for a separate signing tool.
+No Apple account or provisioning profile is needed for this build.
+
+The IPA and its SHA-256 checksum are written to `frontend/ios/App/output/`, with the app version,
+build number and Git revision in the filename. The full Xcode log is in that folder too.
+The current app requires iOS 15.5 or newer. This command leaves `frontend/dist` as a mobile build.
+
 ### Release notes for maintainers
 
 - Bump `versionName`/`versionCode` in `android/app/build.gradle` per release; keep them in

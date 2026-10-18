@@ -2,6 +2,7 @@
 
 更新：2026-10-18。本轮集成基线为 Linux 分支 `codex/linux-gym-coach` 的
 `eae02053`；Mac 集成分支为 `codex/opengym-integration`。
+集成草稿：[PR #1](https://github.com/georgebelt/openGym/pull/1)。
 
 ## 谁负责什么
 

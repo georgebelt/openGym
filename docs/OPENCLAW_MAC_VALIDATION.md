@@ -22,6 +22,12 @@
 | 前端 `npm run test:fatigue-probe` | 108000 次恢复比较、1800 次历史删除比较通过 |
 | `git diff --check` | 通过 |
 
+GitHub [集成 PR #1](https://github.com/georgebelt/openGym/pull/1) 已建立为草稿。
+远程 Actions 在启动前被账号账单状态拦截；Tests 和 CLA 的 annotation 均为
+`The job was not started because your account is locked due to a billing issue.`。
+这不是测试执行失败，也不能计为远程 CI 通过；上表是本机执行结果。账号问题处理后
+再运行 GitHub 检查。
+
 全量前端复验另外暴露并修正了三个既有时区测试假设：demoSeed 的 UTC 中午、
 FIT fixture 的 UTC 开始时间与本地日期不一致、纽约日期窗口测试未指定时区。
 只调整测试数据/时区，未更改生产训练逻辑；前端及 MCP 的 CI 增加两时区矩阵。

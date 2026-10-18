@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { HTTP_PROVIDERS, baseUrlFor } from './core/providers.js';
 import { MAX_OUTPUT_TOKENS } from './core/adapters/http.js';
+import { OPENCLAW_PROVIDER, OPENCLAW_ACCOUNT_REFUSAL, validCoachProfile } from './openclaw-provider.js';
 
 const DATA = process.env.DATA_DIR || '/data';
 const FILE = path.join(DATA, 'coach.json');
@@ -68,7 +69,8 @@ export const PROVIDERS = {
   // The plain-HTTPS providers — Anthropic, OpenAI, Gemini and any OpenAI-compatible endpoint.
   // Described once in core/providers.js so the phone's picker and this table cannot disagree.
   // They spawn nothing and need no runtime in the image: the default api image runs them.
-  ...HTTP_PROVIDERS
+  ...HTTP_PROVIDERS,
+  openclaw: OPENCLAW_PROVIDER
 };
 
 const DEFAULTS = {
@@ -185,7 +187,9 @@ export function reset() { cache = null; keyCache = null; }
 export const authFor = (cfg = load(), p = cfg.provider) => (cfg.auth && cfg.auth[p]) || null;
 export const modelFor = (cfg = load(), p = cfg.provider) => (cfg.models && cfg.models[p]) || (PROVIDERS[p] && PROVIDERS[p].defaultModel) || null;
 export const optionsFor = (cfg = load(), p = cfg.provider) => (cfg.providerOptions && cfg.providerOptions[p]) || {};
-export const boundUidFor = (cfg = load(), p = cfg.provider) => (cfg.boundUid && cfg.boundUid[p]) || null;
+export const boundUidFor = (cfg = load(), p = cfg.provider) => p === 'openclaw'
+  ? (optionsFor(cfg, p).profileUid || null)
+  : (cfg.boundUid && cfg.boundUid[p]) || null;
 export function saveAuth(provider, auth) {
   const cfg = load();
   const next = { ...cfg.auth };
@@ -242,6 +246,13 @@ export const SHARED_ACCOUNT_REFUSAL =
 export function credentialFor(uid) {
   const cfg = load();
   if (cfg.provider === 'fixture') return { ok: true, auth: null, mode: cfg.authMode };
+
+  // The gym persona's read-only MCP server has one fixed account. A shared API token or
+  // per-profile credential must never let another profile reach that account's history.
+  if (cfg.provider === 'openclaw' && (cfg.authMode !== 'instance' ||
+      !validCoachProfile(boundUidFor(cfg)) || boundUidFor(cfg) !== uid)) {
+    return { ok: false, reason: 'shared-account', message: OPENCLAW_ACCOUNT_REFUSAL, mode: cfg.authMode };
+  }
 
   if (cfg.authMode === 'profile') {
     const rec = loadProfileAuth(uid);
@@ -317,6 +328,9 @@ export function isConnected() {
   const cfg = load();
   if (!isEnabled()) return false;
   if (cfg.provider === 'fixture') return true;
+  if (cfg.provider === 'openclaw') {
+    return !!baseUrlFor('openclaw', cfg) && credentialFor(boundUidFor(cfg)).ok;
+  }
   if (cfg.authMode === 'profile') return true;
   const rec = authFor(cfg);
   if (!rec) return !!providerMeta(cfg).keyOptional && !!baseUrlFor(cfg.provider, cfg);

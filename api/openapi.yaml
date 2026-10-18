@@ -2782,12 +2782,19 @@ paths:
                 model:
                   type: string
                   maxLength: 80
-                  description: For the provider being set (or the current one). Empty string clears it.
+                  description: For the provider being set (or the current one). Empty string clears it. OpenClaw uses an agent route such as openclaw/gym-coach.
                 baseUrl:
                   type: string
                   description: |
                     Only for a provider with a configurable endpoint; validated before it is stored.
                     Empty means "back to the default", so it is refused for a provider that has none.
+                profileUid:
+                  type: string
+                  maxLength: 64
+                  description: |
+                    OpenClaw only. Account ID matching the gym bridge profile and MCP OPENGYM_UID.
+                    Letters, digits, underscores and hyphens. Empty clears the binding and disables
+                    calls. Other profiles cannot use this provider. Stored per provider with baseUrl.
                 community: { type: boolean, description: Offer the cohort comparison on this instance. }
                 caps:
                   type: object
@@ -3855,6 +3862,9 @@ components:
         model: { type: string, description: The model in force for the active provider. }
         models: { type: object, description: Model per provider. Switching provider keeps them all. }
         baseUrl: { oneOf: [{ type: string }, { type: 'null' }] }
+        profileUid:
+          oneOf: [{ type: string }, { type: 'null' }]
+          description: Explicit MCP profile binding for OpenClaw; null for other providers.
         knownModels:
           oneOf: [{ type: array, items: { type: string } }, { type: 'null' }]
           description: From the live check, when the provider could be asked.

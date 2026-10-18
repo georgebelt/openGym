@@ -11,6 +11,7 @@ import { adapterFor } from './adapters/index.js';
 import { canDropPrivileges } from './adapters/spawn.js';
 import { DATA_CATEGORIES } from './core/payload.js';
 import { validateBaseUrl, validateHeaders, baseUrlFor } from './core/providers.js';
+import { validCoachProfile, validCoachPersona } from './openclaw-provider.js';
 
 // Job failures the user sees, in the app's own voice. The raw provider detail never reaches
 // them — it goes to the admin card, which is where someone can act on it (FR-47).
@@ -163,6 +164,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
           connected: !!(cfgStore.authFor(cfg, id) && cfgStore.authFor(cfg, id).data)
         })),
         model: cfgStore.modelFor(cfg),
+        profileUid: cfg.provider === 'openclaw' ? cfgStore.optionsFor(cfg).profileUid || '' : null,
         models: cfg.models,
         baseUrl: cfgStore.providerMeta(cfg).http ? baseUrlFor(cfg.provider, cfg) : null,
         // Extra static headers this endpoint is called with (compatible endpoints only).
@@ -218,6 +220,9 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
       }
       const target = patch.provider || current.provider;
       if (body.model !== undefined) {
+        if (target === 'openclaw' && body.model && !validCoachPersona(body.model)) {
+          return json(res, 400, { error: 'persona must be openclaw/<agent-id>' });
+        }
         patch.models = { ...current.models };
         if (body.model) patch.models[target] = String(body.model).slice(0, 80); else delete patch.models[target];
       }
@@ -233,12 +238,20 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
         patch.providerOptions = { ...current.providerOptions, [target]: { ...(current.providerOptions[target] || {}), baseUrl: v.value } };
       }
       if (body.headers !== undefined) {
+        if (target === 'openclaw') return json(res, 400, { error: 'gym bridge routing headers are managed automatically' });
         if (!cfgStore.PROVIDERS[target].baseUrl) return json(res, 400, { error: `${target} has a fixed endpoint` });
         const h = validateHeaders(body.headers);
         if (!h.ok) return json(res, 400, { error: h.error });
         // Build on the patch, not on current: a body carrying baseUrl AND headers must keep both.
         const next = { ...((patch.providerOptions && patch.providerOptions[target]) || current.providerOptions[target] || {}) };
         if (h.value) next.headers = h.value; else delete next.headers;
+        patch.providerOptions = { ...current.providerOptions, ...(patch.providerOptions || {}), [target]: next };
+      }
+      if (body.profileUid !== undefined) {
+        if (target !== 'openclaw' || (body.profileUid !== '' && !validCoachProfile(body.profileUid))) {
+          return json(res, 400, { error: 'enter the openGym account ID bound to the gym MCP server' });
+        }
+        const next = { ...((patch.providerOptions && patch.providerOptions[target]) || current.providerOptions[target] || {}), profileUid: body.profileUid };
         patch.providerOptions = { ...current.providerOptions, ...(patch.providerOptions || {}), [target]: next };
       }
       if (body.community !== undefined) patch.community = !!body.community;

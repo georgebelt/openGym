@@ -61,6 +61,7 @@ vi.mock('../store/useUI.js', () => {
 
 // Shaped exactly like GET /api/admin/coach in api/coach/routes.js.
 const PROVIDERS = [
+  { id: 'openclaw', label: 'OpenClaw gym coach', http: true, apiKey: true, baseUrl: true, defaultModel: 'openclaw/gym-coach' },
   { id: 'anthropic', label: 'Claude', runtime: false, setupToken: true, deviceLogin: false, apiKey: true, http: true, baseUrl: false, keyOptional: false, keyPlaceholder: 'sk-ant-…', defaultModel: 'claude-sonnet-4', connected: true },
   { id: 'openai', label: 'OpenAI', runtime: false, setupToken: false, deviceLogin: false, apiKey: true, http: true, baseUrl: false, keyOptional: false, keyPlaceholder: 'sk-…', defaultModel: 'gpt-4o', connected: false },
   { id: 'compatible', label: 'OpenAI-compatible', runtime: false, setupToken: false, deviceLogin: false, apiKey: true, http: true, baseUrl: true, keyOptional: true, keyPlaceholder: null, defaultModel: null, connected: false },
@@ -149,6 +150,21 @@ const pick = async (el, value) => {
     await new Promise(r => setTimeout(r, 0))
   })
 }
+
+it('configures a gym bridge profile and persona without exposing static session headers', async () => {
+  mocks.routes['/api/admin/coach'] = status({
+    provider: 'openclaw', baseUrl: 'http://gym-bridge:18890', profileUid: '',
+    model: 'openclaw/gym-coach', lastSuccess: null, runtime: { ok: false }
+  })
+  await mount()
+  expect(host.textContent).toContain('MCP profile ID')
+  expect(host.textContent).toContain('Persona')
+  expect(host.textContent).not.toContain('Extra headers (optional)')
+  expect(host.textContent).not.toContain('every profile may use the Coach')
+  const profile = [...host.querySelectorAll('input')].find(e => e.placeholder.startsWith('Account ID'))
+  await blurWith(profile, 'alice')
+  expect(sent('/api/admin/coach/config').at(-1).body).toEqual({ profileUid: 'alice' })
+})
 
 // Opens the last sheet the screen asked for into its own root and returns it.
 const openLastSheet = async () => {

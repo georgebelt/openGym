@@ -20,13 +20,21 @@ rest of this document applies to you.
 | **OpenAI API** | plain HTTPS to `api.openai.com` | an API key | default |
 | **Google Gemini** | plain HTTPS to `generativelanguage.googleapis.com` | an API key | default |
 | **OpenAI-compatible endpoint** | plain HTTPS to a URL you give it — Ollama, LM Studio, vLLM, OpenRouter, a gateway of your own | an API key, optional | default |
+| **OpenClaw gym coach (this fork)** | a restricted bridge to a dedicated OpenClaw persona, bound to one MCP profile | a gym bridge token | default |
 | **Claude (Anthropic)** | the Claude Agent SDK, inside the container | a `claude setup-token` | `coach` |
 | **Codex (OpenAI)** | the Codex CLI, inside the container | Codex's own device sign-in | `coach` |
 
-The first four spawn nothing. A job is one HTTPS request from the api process, so there is no
+The HTTP providers spawn nothing. A job is one HTTP(S) request from the api process, so there is no
 child process to drop privileges on, no runtime to carry in the image, and nothing to install:
 **they work on the image every instance already has.** The `coach` image, the unprivileged
 `coach` user and the `./coach-auth` mount described further down exist for the last two only.
+
+For OpenClaw, follow [the Linux deployment requirements](OPENCLAW_GYM_COACH_REQUIREMENTS.md).
+The phone pairs with the openGym backend. In the backend's Admin → AI Coach, choose
+**OpenClaw gym coach**, enter the **gym bridge** base URL, **MCP profile ID**, and its
+restricted token, then keep persona `openclaw/gym-coach`, **List models**, and **Test**.
+The gateway token and the underlying LLM configuration stay on Linux. This provider is
+server-only; it is not offered in the phone's direct API-key picker.
 
 A model on your own LAN is the compatible endpoint with no key: point it at
 `http://ollama.lan:11434` and pick a model from the list it serves. That is the whole

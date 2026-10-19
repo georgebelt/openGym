@@ -39,6 +39,7 @@ All settings live in `.env`; [`.env.example`](../.env.example) explains each one
 | [CLAUDE.md](../CLAUDE.md) | You want the architecture in one page (written for Claude Code, useful for people too) |
 | [HTTP API](API.md) | You're touching routes; the OpenAPI spec is the source of truth |
 | [Mac / Linux ownership](OPENCLAW_COLLABORATION.md) | Work on this fork's app, OpenClaw deployment, integration branch or remaining acceptance tasks |
+| [Unified Coach UX](OPENCLAW_COACH_UX.md) | Design this fork's ordinary conversation and plan suggestions in one Coach thread |
 | [Roadmap](../ROADMAP.md) | You want to know what's planned and where your idea fits |
 | [Changelog](../CHANGELOG.md) | You want to know what changed in a release |
 

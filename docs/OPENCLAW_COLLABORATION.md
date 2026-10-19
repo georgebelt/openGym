@@ -1,7 +1,7 @@
 # openGym：Mac / Linux 分工与交接
 
-更新：2026-10-19。Linux `a062b655` 已集成；app/API、普通对话 bridge 和 persona 提示
-已实现。当前代码通过集成分支审查后合入 `main`。真实运行结果见
+更新：2026-10-19。app/API、普通对话 bridge 和 persona 提示已实现，并通过 PR #1
+合入 `main`（`c6a4cd3d`）。Linux 最新记录 `10c18609` 确认该版本已部署。真实运行结果见
 [Linux 验收记录](OPENCLAW_LINUX_RESULTS.md)，本机检查见
 [Mac 验证记录](OPENCLAW_MAC_VALIDATION.md)。
 
@@ -30,14 +30,16 @@ Glass 仅作只读参考，不属于本任务的修改范围。
 - 取消/撤回手机步骤：产品无入口，不适用；不新增测试按钮或为此扩展端点。
 - 中文 IPA 已构建：`openGym-1.4.1-26-486e4b88-unsigned.ipa`；本轮集成未改客户端，无需重打。
 
-## 合并后的 Linux 部署步骤
+## 生产部署与下一步验证
 
-1. 合入最新 `origin/main`，保留自己的分支历史；备份 openGym 数据与 bridge 去重文件。
-2. 按 `deploy/linux/docker-compose.yml` 重建 API/web，并重启 bridge；此前 Linux 只部署了
-   新 bridge，未构建包含 Mac 普通对话 API/UI 的新镜像。
-3. 同步 v1.1 persona 提示，保持现有 profile/MCP 绑定、Tailscale 和超时配置。
-4. 核验 `/api/health`、普通对话能力和账号绑定；用新版 IPA 完成聊天、生成、应用、续聊。
-   把实际部署 SHA 与结果追加到 Linux 验收记录。
+Linux 已备份数据、以 `c6a4cd3d` 重建 API/web（含新版 CoachChat），并重启加固后的
+bridge。Linux 复测 bridge 23/23 通过；`/api/health`、18445 入口、capabilities 正常，
+真实中文聊天经 MCP 读到当前周计划，见 [Linux 验收记录 §14](OPENCLAW_LINUX_RESULTS.md#14-main-合并后的生产部署2026-10-19)。
+
+接下来由用户安装新版 IPA，验证同一教练界面中的聊天、生成建议、确认应用、续聊。
+可使用上面的已验证 IPA，或从 `main` 执行 `bash scripts/build-ios-ipa.sh` 重新构建。
+Linux 核验服务端结果；如有客户端问题，由 Mac 修复。本次部署记录合并仅涉及文档，
+无需因此再次重建 Linux 容器。
 
 本次集成修复了账号维度的缓存/会话隔离、不完整 SSE 回复处理、持久化与测试覆盖。
 新版会话键包含 profile；旧版无 profile 的请求缓存保留，但重放返回 `interrupted`，不会

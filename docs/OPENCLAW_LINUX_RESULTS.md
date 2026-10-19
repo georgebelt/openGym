@@ -1,8 +1,8 @@
 # Linux 实施与验收记录:openGym + OpenClaw gym-coach
 
-> 下文是 Linux 各次部署的原始证据。当前集成状态及 main 升级步骤以
-> [协作说明](OPENCLAW_COLLABORATION.md) 为准；§13 的 bridge 已部署，包含新 app/API
-> 的 API/web 镜像和集成修复仍需随 main 升级。
+> 下文是 Linux 各次部署的原始证据。最新部署见 §14：`c6a4cd3d` 的 API/web 与
+> 加固后的 bridge 已上线。当前分工及后续真机验证以
+> [协作说明](OPENCLAW_COLLABORATION.md) 为准。
 
 日期:2026-10-18。实施方:Linux coding agent。基线交接分支 `codex/openclaw-gym-coach`
 (`9d74d250`),工作分支 `codex/linux-gym-coach`。真实主机名/地址经私密渠道告知用户,
@@ -211,3 +211,14 @@ app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧
 - **请 Mac 顺手清理**:`OPENCLAW_COLLABORATION.md` 中 L1/L2 的过程分析(问题复现、
   CoachChat 无取消按钮的论证等)已完成历史使命,建议下轮集成时收敛为一行结论,
   与本文档的清理保持一致(用户要求减少过程性内容)。
+
+## 14. main 合并后的生产部署(2026-10-19)
+
+- PR #1 已由 Mac 合入 main(`c6a4cd3d`)。Mac 集成前对 bridge 做的加固
+  (profile 限定去重账本+损坏拒启、未知字段拒绝、流中 1MiB/32k 强制、
+  坏块/工具调用/不完整流一律错误、会话键加 profile)已审查采纳,
+  本地测试 **23/23**(含 Mac 新增 9 条)。
+- 部署窗口执行:数据已 tar 备份(~/Backups/opengym/);容器以 main 内容
+  重建(含新 CoachChat 前端),`/api/health` ok、18445 入口 200;
+  bridge 以合并提交重启,capabilities ok,真实中文聊天经 MCP 读到当前周计划。
+- **实际部署 SHA:`c6a4cd3d`（PR #1 的 main 合并提交）。**

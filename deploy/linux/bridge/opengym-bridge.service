@@ -1,0 +1,18 @@
+# openGym gym bridge systemd user 单元
+# 安装:cp 到 ~/.config/systemd/user/,环境文件 ~/.config/opengym-bridge/env(0600)先就位
+# systemctl --user daemon-reload && systemctl --user enable --now opengym-bridge
+[Unit]
+Description=openGym gym-coach 受限 bridge (127.0.0.1+docker网关:18890 → OpenClaw gateway)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/openGym/deploy/linux/bridge
+EnvironmentFile=%h/.config/opengym-bridge/env
+ExecStart=%h/openGym/deploy/linux/bridge/.venv/bin/python3 gym_bridge.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

@@ -20,13 +20,43 @@ rest of this document applies to you.
 | **OpenAI API** | plain HTTPS to `api.openai.com` | an API key | default |
 | **Google Gemini** | plain HTTPS to `generativelanguage.googleapis.com` | an API key | default |
 | **OpenAI-compatible endpoint** | plain HTTPS to a URL you give it — Ollama, LM Studio, vLLM, OpenRouter, a gateway of your own | an API key, optional | default |
+| **OpenClaw gym coach (this fork)** | a restricted bridge to a dedicated OpenClaw persona, bound to one MCP profile | a gym bridge token | default |
 | **Claude (Anthropic)** | the Claude Agent SDK, inside the container | a `claude setup-token` | `coach` |
 | **Codex (OpenAI)** | the Codex CLI, inside the container | Codex's own device sign-in | `coach` |
 
-The first four spawn nothing. A job is one HTTPS request from the api process, so there is no
+The HTTP providers spawn nothing. A job is one HTTP(S) request from the api process, so there is no
 child process to drop privileges on, no runtime to carry in the image, and nothing to install:
 **they work on the image every instance already has.** The `coach` image, the unprivileged
 `coach` user and the `./coach-auth` mount described further down exist for the last two only.
+
+For OpenClaw, follow [the Linux deployment requirements](OPENCLAW_GYM_COACH_REQUIREMENTS.md).
+The phone pairs with the openGym backend. In the backend's Admin → AI Coach, choose
+**OpenClaw gym coach**, enter the **gym bridge** base URL, **MCP profile ID**, and its
+restricted token, then keep persona `openclaw/gym-coach`, **List models**, and **Test**.
+The gateway token and the underlying LLM configuration stay on Linux. This provider is
+server-only; it is not offered in the phone's direct API-key picker.
+
+With a bridge implementing [chat contract v1](OPENCLAW_CHAT_CONTRACT.md), the app has
+one Coach conversation: ordinary messages ask training questions using read-only access to
+synced history. **Generate plan suggestions** opens an editable requirements brief, then the
+existing validated proposal appears in the same conversation. Only applying that card changes
+your plan. No persona selector is shown. Chat can continue while a proposal is being generated;
+later messages do not modify its submitted requirements.
+
+The first conversation visit explains full-history access and server/provider conversation
+storage. Chat does not require the plan questionnaire. New plan generation still uses your
+goal, schedule and equipment. App conversations are separate from other OpenClaw entry points.
+Only the confirmed brief and normal bounded training payload go to the proposal runner.
+Older bridges keep explicit plan actions; ordinary messages remain disabled until the new
+capability is available. Both conversation messages and proposals use the admin's daily caps.
+
+The backend stores up to 200 message records in `data/coach-chat/<uid>.json` for deduplication
+and shows the most recent 40. The stable conversation ID is server-owned. A message accepted
+by the backend continues after the phone leaves the page; the phone polls for completion.
+Unconfirmed delivery can be retried with the same client ID. Completed/failed IDs never
+silently rerun a model call; a new message starts a new request. A server restart marks an
+interrupted message failed. Forget/reset/account deletion clears backend conversation state
+and aborts in-flight chat; retention at the OpenClaw/LLM provider remains a Linux concern.
 
 A model on your own LAN is the compatible endpoint with no key: point it at
 `http://ollama.lan:11434` and pick a model from the list it serves. That is the whole

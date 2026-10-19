@@ -2471,6 +2471,101 @@ paths:
                 version: 1
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /api/coach/chat:
+    get:
+      tags: [coach]
+      operationId: getCoachConversation
+      summary: Bound profile's conversation and chat capability
+      description: |
+        OpenClaw only. Checks bridge chat contract v1 before enabling ordinary conversation.
+        Returns the latest 40 messages (up to 200 retained for retry deduplication), consent,
+        maxMessageLen and the shared cap. A restart marks interrupted messages failed, never
+        automatically replaying an ambiguous upstream call. No internal session, credential,
+        tool trace or request fingerprint is exposed.
+      responses:
+        '200':
+          description: Conversation state, including supported=false for an old/unreachable bridge.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported: { type: boolean }
+                  consent: { type: boolean, description: Full-history conversation disclosure version 1 accepted. }
+                  maxMessageLen: { type: integer, maximum: 8000 }
+                  cap:
+                    type: object
+                    properties:
+                      used: { type: integer }
+                      limit: { type: integer }
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/CoachChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Profile does not match the MCP account binding (shared). }
+        '503': { $ref: '#/components/responses/CoachOff' }
+
+  /api/coach/chat/consent:
+    post:
+      tags: [coach]
+      operationId: consentCoachConversation
+      summary: Accept the full-history conversation disclosure
+      description: Server-owned consent, independent of the synced plan questionnaire. Creates the conversation if absent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer, enum: [1] }
+      responses:
+        '200': { description: Same conversation state as GET /api/coach/chat. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Unsupported consent version (consent). }
+        '409': { description: Profile binding refusal (shared). }
+        '503': { description: Coach off or bridge chat unavailable (off or unavailable). }
+
+  /api/coach/chat/messages:
+    post:
+      tags: [coach]
+      operationId: sendCoachMessage
+      summary: Enqueue or retrieve an ordinary conversation message
+      description: |
+        clientId is a client UUID v4 retained for an uncertain delivery retry. Same ID/body
+        returns the existing message without charging or rerunning; a changed body returns
+        conflict. The backend chooses the conversation, upstream request ID, profile and
+        current proposal context. Additional fields are rejected. One chat per profile can
+        run concurrently with a structured proposal. Poll GET /api/coach/chat for the result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [clientId, message]
+              properties:
+                clientId: { type: string, format: uuid }
+                message: { type: string, minLength: 1, maxLength: 8000, description: Also limited by the administrator's maxMessageLen. }
+                lang: { type: string, default: en, maxLength: 16 }
+      responses:
+        '202':
+          description: Message accepted or existing result for the same clientId.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: '#/components/schemas/CoachChatMessage' }
+        '400': { description: Invalid text/ID/language or extra routing fields (invalid). }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Conversation disclosure not accepted (consent). }
+        '409': { description: Another message running, changed retry body, or account mismatch (busy, conflict, shared). }
+        '429': { description: Shared daily budget exhausted (cap). }
+        '503': { description: Coach off or bridge chat unavailable (off or unavailable). }
+
   /api/coach/status:
     get:
       tags: [coach]
@@ -2782,12 +2877,19 @@ paths:
                 model:
                   type: string
                   maxLength: 80
-                  description: For the provider being set (or the current one). Empty string clears it.
+                  description: For the provider being set (or the current one). Empty string clears it. OpenClaw uses an agent route such as openclaw/gym-coach.
                 baseUrl:
                   type: string
                   description: |
                     Only for a provider with a configurable endpoint; validated before it is stored.
                     Empty means "back to the default", so it is refused for a provider that has none.
+                profileUid:
+                  type: string
+                  maxLength: 64
+                  description: |
+                    OpenClaw only. Account ID matching the gym bridge profile and MCP OPENGYM_UID.
+                    Letters, digits, underscores and hyphens. Empty clears the binding and disables
+                    calls. Other profiles cannot use this provider. Stored per provider with baseUrl.
                 community: { type: boolean, description: Offer the cohort comparison on this instance. }
                 caps:
                   type: object
@@ -3675,6 +3777,18 @@ components:
         used: { type: integer }
         limit: { type: integer, description: 0 means no per-profile cap. }
 
+    CoachChatMessage:
+      type: object
+      properties:
+        id: { type: string, description: Server-assigned gymmsg UUID. }
+        clientId: { type: string, format: uuid }
+        text: { type: string }
+        at: { type: integer, description: Submission time in epoch milliseconds. }
+        state: { type: string, enum: [running, complete, failed] }
+        reply: { type: [string, 'null'], description: Final assistant text only. }
+        error: { type: [string, 'null'], enum: [provider, timeout, unusable, restart, null] }
+        finishedAt: { type: integer }
+
     CoachStatus:
       type: object
       properties:
@@ -3855,6 +3969,9 @@ components:
         model: { type: string, description: The model in force for the active provider. }
         models: { type: object, description: Model per provider. Switching provider keeps them all. }
         baseUrl: { oneOf: [{ type: string }, { type: 'null' }] }
+        profileUid:
+          oneOf: [{ type: string }, { type: 'null' }]
+          description: Explicit MCP profile binding for OpenClaw; null for other providers.
         knownModels:
           oneOf: [{ type: array, items: { type: string } }, { type: 'null' }]
           description: From the live check, when the provider could be asked.

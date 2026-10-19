@@ -2274,6 +2274,7 @@ const routes = {
     try { text = JSON.stringify(body.state); }
     catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
     atomicWrite(stateFile(user.id), text);
+    if ((Number(body.state.resetAt) || 0) > storedReset) coachJobs.clearUser(user.id);
     // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
     // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
     // `_rev` going from 7 to 8 does not change the file's size, so two writes inside one 4 ms
@@ -2487,7 +2488,7 @@ const routes = {
     presence.delete(u.id);
     // The training history and any Coach credential of theirs, both outside db.json.
     try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
-    try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
+    try { coachConfig.clearProfileAuth(u.id); coachJobs.clearUser(u.id); } catch { /* nothing stored */ }
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
     saveDb();

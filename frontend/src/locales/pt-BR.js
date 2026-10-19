@@ -1403,6 +1403,18 @@ export const PT_BR_OVERRIDES = {
   'Gentle, for headphones or a quiet room.': 'Suave, para fones de ouvido ou um lugar silencioso.',
   'Fewer than two workouts in this period. Pick a longer one.': 'Menos de dois treinos neste período. Escolha um mais longo.',
   'Releases are checked on GitHub. The download is verified against its checksum before the installer opens.': 'As versões são verificadas no GitHub. O download é conferido pela soma de verificação antes de abrir o instalador.',
+  "Plan requirements: {0}": "Requisitos do plano: {0}",
+  "Generate plan suggestions": "Gerar sugestões de plano",
+  "Conversation is temporarily unavailable. Plan suggestions are still available.": "A conversa está temporariamente indisponível. As sugestões de plano continuam disponíveis.",
+  "Let’s talk about your training. When you are ready, generate plan suggestions here. Nothing changes until you apply them.": "Vamos falar do seu treino. Quando quiser, gere sugestões aqui. Nada muda até você aplicá-las.",
+  "The Coach can read your full synced training history through read-only tools. Plan suggestions use a limited training summary and the requirements you confirm.": "O treinador pode ler todo o seu histórico sincronizado com ferramentas somente de leitura. As sugestões usam um resumo limitado dos treinos e os requisitos que você confirmar.",
+  "Conversation is saved on your server and with its AI provider. You do not need to fill in plan details to chat.": "A conversa é salva no seu servidor e no provedor de IA dele. Você não precisa preencher os detalhes do plano para conversar.",
+  "Confirm the requirements for this suggestion. Later messages will not change this request.": "Confirme os requisitos desta sugestão. As mensagens seguintes não alteram este pedido.",
+  "Plan requirements": "Requisitos do plano",
+  "Add your goal, schedule and equipment before generating a plan. You can keep chatting without them.": "Adicione seu objetivo, horário e equipamento antes de gerar um plano. Você pode continuar conversando sem esses dados.",
+  "Delivery is not confirmed. Retry checks the same message without sending it twice.": "A entrega não está confirmada. Tentar novamente verifica a mesma mensagem sem enviá-la duas vezes.",
+  "Discuss changes below, then generate plan suggestions when ready.": "Converse sobre as mudanças abaixo e gere sugestões quando quiser.",
+
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

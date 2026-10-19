@@ -1,0 +1,63 @@
+{
+  "ranAt": "2026-10-18T10:32:35.838Z",
+  "model": "openclaw/gym-coach",
+  "bridge": "http://127.0.0.1:18890",
+  "results": [
+    {
+      "kind": "create",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false,
+      "planDays": 3,
+      "ms": 211289,
+      "cjk": true,
+      "sample": "三天分为上肢推拉、下肢核心、全身强化,延续你过去10次训练已经建立起来的卧推、划船、推举、山羊挺身深蹲和罗马尼亚硬拉这几个核心动作。新增几个徒手和单侧动作,一方面补足背部拉力与手臂的训练量,一方面在你的哑铃已经练到24kg单只上限的情况下,",
+      "idsOk": true,
+      "idsChecked": 18
+    },
+    {
+      "kind": "review",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 117107,
+      "cjk": true,
+      "sample": "最近三周半你完成了全部10次计划内训练,下肢的深蹲和罗马尼亚硬拉进展稳定、没有停滞。但卧推在6次训练里有4次停滞,站姿哑铃推举更是6次全部停滞,10月10日那次两个推举动作都明显掉重,同一天你也提到肩膀前侧有点紧;平板支撑最后一组连续4次都",
+      "idsOk": true,
+      "idsChecked": 6,
+      "planDays": 3,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false
+    },
+    {
+      "kind": "refine",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 425845,
+      "cjk": true,
+      "sample": "周一全身训练A保持不变:深蹲、卧推、俯身划船、站姿推举、罗马尼亚硬拉和平板支撑,覆盖主要肌群,硬拉保持中等重量照顾你的下背部。周三改成了拉力日,全部换成哑铃背部和肱二头肌动作——单臂俯身划船、卧姿反握划船、俯卧拉背、耸肩、哑铃弯举——并优先",
+      "idsOk": true,
+      "idsChecked": 13,
+      "planDays": 2,
+      "transportRetries": 1,
+      "hitBridgeTimeout": true
+    },
+    {
+      "kind": "debrief",
+      "ok": true,
+      "nochange": false,
+      "repairRound": false,
+      "ms": 39276,
+      "cjk": true,
+      "sample": "这次下肢日完成情况稳定:高脚杯深蹲24kg×10三组全部达标(RPE 8/8.5/9),罗马尼亚硬拉30kg×8三组全部达标(RPE 8/8.5/9),两者数据与最近三次训练完全一致。负重平板支撑前两组撑满45秒,第三组只到40秒,未达目标",
+      "idsOk": true,
+      "idsChecked": 0,
+      "planDays": 3,
+      "transportRetries": 0,
+      "hitBridgeTimeout": false
+    }
+  ]
+}

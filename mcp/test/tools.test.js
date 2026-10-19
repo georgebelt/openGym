@@ -37,10 +37,11 @@ function freshState() {
   return s
 }
 
-// Pin "today" before building state so dayPlan/week alignment matches the assertions below.
+// Pin local noon before building state so dayPlan/week alignment matches the assertions below.
+// UTC noon is already evening in Asia/Shanghai, when the demo includes today's finished workout.
 // `toFake: ['Date']` only — keeps fs.watch and the rest of the event loop real.
 beforeAll(() => {
-  vi.useFakeTimers({ now: new Date(FAKE_TODAY_ISO + 'T12:00:00Z'), toFake: ['Date'] })
+  vi.useFakeTimers({ now: new Date(FAKE_TODAY_ISO + 'T12:00:00'), toFake: ['Date'] })
   S = freshState()
   _seedStateForTests(S)
 })
@@ -892,7 +893,11 @@ describe('muscle_balance', () => {
   describe('the reported cutoff is a local date, like every other date in this API', () => {
     const TZ = process.env.TZ
     beforeAll(() => { process.env.TZ = 'Asia/Tokyo'; vi.setSystemTime(new Date('2026-07-27T08:00:00')) })
-    afterAll(() => { process.env.TZ = TZ; vi.setSystemTime(new Date(FAKE_TODAY_ISO + 'T12:00:00Z')) })
+    afterAll(() => {
+      if (TZ === undefined) delete process.env.TZ
+      else process.env.TZ = TZ
+      vi.setSystemTime(new Date(FAKE_TODAY_ISO + 'T12:00:00'))
+    })
 
     // Workouts imported without a clock (no w.start) fall back to their date at local noon, so
     // they are the probe for which calendar dates the window really accepts.

@@ -27,6 +27,7 @@ import { handleFor } from './handle.js';
 import { fetchFor } from './node-fetch.js';
 import { canDropPrivileges, unprivilegedIds } from './adapters/spawn.js';
 import { cohortForPayload, invalidate as invalidateCohort } from './cohort.js';
+import { clearChat, rememberDecision } from './chat-store.js';
 
 // The prompt assembly, the plan fingerprint and the invoke→parse→validate→repair loop all
 // live in ./core now, where the phone can import them too. Re-exported so nothing that
@@ -72,6 +73,7 @@ function patchUser(uid, patch) {
  *  is cancelled where the adapter can be (the HTTP ones — a spawned runtime runs to its end),
  *  and either way finishes without writing anything back (see finish). */
 export function clearUser(uid) {
+  clearChat(uid);
   const { daily } = readUser(uid);
   try { fs.unlinkSync(userFile(uid)); } catch { /* nothing to clear */ }
   if (daily?.date === todayISO()) writeUser(uid, { ...EMPTY, daily });
@@ -131,6 +133,16 @@ function bumpInstanceDaily() {
 function instanceUsedToday() {
   const daily = cfgStore.load().daily;
   return daily?.date === todayISO() ? daily.count : 0;
+}
+
+// Chat and structured proposals spend the same administrator-configured budget.
+export function chargeRun(uid) {
+  const caps = cfgStore.load().caps || {};
+  const { used, limit } = capState(uid);
+  if (limit > 0 && used >= limit) throw new CoachError('cap', 'daily limit reached');
+  if (caps.instanceDaily > 0 && instanceUsedToday() >= caps.instanceDaily) throw new CoachError('cap', 'this instance has reached its daily limit');
+  bumpDaily(uid);
+  bumpInstanceDaily();
 }
 
 /* ---------- status ---------- */
@@ -224,16 +236,10 @@ export function enqueue(uid, opts) {
     if (!priv.ok) throw new CoachError('unprivileged', `Coach jobs are disabled: ${priv.why}`);
   }
 
-  const caps = cfgStore.load().caps || {};
-  const { used, limit } = capState(uid);
-  if (limit > 0 && used >= limit) throw new CoachError('cap', 'daily limit reached');
-  if (caps.instanceDaily > 0 && instanceUsedToday() >= caps.instanceDaily) throw new CoachError('cap', 'this instance has reached its daily limit');
-
   // Counted at enqueue, not at completion: the cap exists to bound what one profile can spend
   // of the owner's provider account, and queueing twenty jobs spends it whether or not the
   // twentieth ever finishes.
-  bumpDaily(uid);
-  bumpInstanceDaily();
+  chargeRun(uid);
 
   const job = {
     id: crypto.randomBytes(8).toString('hex'),
@@ -401,6 +407,7 @@ async function execute(job) {
 export function resolvePending(uid, { accepted = [], rejected = [], dismissed = false } = {}) {
   const rec = readUser(uid);
   if (!rec.pending) return { ok: true };
+  rememberDecision(uid, rec.pending, { accepted, rejected, dismissed });
   const history = [...(rec.history || []), {
     id: rec.pending.id, kind: rec.pending.kind,
     outcome: dismissed ? 'dismissed' : 'applied',

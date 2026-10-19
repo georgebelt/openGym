@@ -292,3 +292,10 @@
 .cmp-bar i{display:block;height:100%;border-radius:7px;background:var(--label-3);opacity:.55}
 .cmp-bar.you i{background:var(--acc);opacity:1}
 .cmp-bar span{position:absolute;left:8px;top:0;line-height:22px;font-size:11.5px;font-weight:600;color:var(--label);font-variant-numeric:tabular-nums;text-shadow:0 0 6px var(--bg)}
+/* Wrappers preserve the original bubble alignment while sorting messages and proposal cards. */
+.chat-event { display: contents; }
+.chat-end { scroll-margin-bottom: calc(160px + var(--sab)); }
+.chat-consent, .chat-brief { padding: 18px; width: 100%; box-sizing: border-box; }
+.chat-consent p, .chat-brief p { color: var(--label-2); line-height: 1.6; }
+.chat-brief textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 12px; font: inherit; color: var(--label); background: var(--surface); border: 1px solid var(--sep); border-radius: 12px; margin-bottom: 12px; }
+.chat-plan-kind { width: 100%; padding: 10px; margin-bottom: 12px; color: var(--label); background: var(--surface); border: 1px solid var(--sep); border-radius: var(--r); font: inherit; }

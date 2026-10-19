@@ -121,10 +121,11 @@ export default function AdminCoach() {
   </div>
 
   const meta = d.providers.find(p => p.id === d.provider) || {}
+  const isOpenClaw = d.provider === 'openclaw'
   const authState = d.auth?.state
   const authed = authState === 'connected' || authState === 'not-required' || authState === 'optional'
   const needsEndpoint = !!meta.baseUrl
-  const hasEndpoint = !needsEndpoint || !!d.baseUrl
+  const hasEndpoint = !needsEndpoint || (!!d.baseUrl && (!isOpenClaw || !!d.profileUid))
   const live = d.enabled && d.runtime.ok && authed && hasEndpoint
 
   const status = !d.enabled ? 'Off. Users won’t see the Coach anywhere in the app.'
@@ -207,14 +208,24 @@ export default function AdminCoach() {
         </div>)}
       </Step>
 
-      {/* ---------- endpoint (compatible only) ---------- */}
+      {/* ---------- configurable endpoint ---------- */}
       {needsEndpoint && <Step n={num()} title="Endpoint" hint={d.baseUrl || 'Where the model runs'} done={step2Done} {...stepAt()}>
-        <div className="adm-hint">The address of any server that speaks OpenAI's chat API: <b>Ollama</b>, <b>LM Studio</b>, <b>vLLM</b>, <b>OpenRouter</b>, or a gateway of your own. The base as your provider documents it, with or without its version (<code>/v1</code>, <code>/v4</code>), and no key in the URL.</div>
+        <div className="adm-hint">{isOpenClaw
+          ? <>The restricted gym bridge on your Linux server. The bridge connects to the dedicated gym-coach persona and holds the OpenClaw gateway token. Use an address reachable from the openGym backend; the iPhone connects to openGym through Tailscale.</>
+          : <>The address of any server that speaks OpenAI's chat API: <b>Ollama</b>, <b>LM Studio</b>, <b>vLLM</b>, <b>OpenRouter</b>, or a gateway of your own. The base as your provider documents it, with or without its version (<code>/v1</code>, <code>/v4</code>), and no key in the URL.</>}</div>
         <div className="adm-field">
           <label>Base URL</label>
-          <TextField key={d.baseUrl || ''} defaultValue={d.baseUrl || ''} placeholder="http://ollama:11434  or  https://openrouter.ai/api" inputMode="url" autoCapitalize="none" autoCorrect="off"
+          <TextField key={d.baseUrl || ''} defaultValue={d.baseUrl || ''} placeholder={isOpenClaw ? 'http://gym-bridge:18890' : 'http://ollama:11434  or  https://openrouter.ai/api'} inputMode="url" autoCapitalize="none" autoCorrect="off"
             onBlur={e => e.target.value !== (d.baseUrl || '') && patch({ baseUrl: e.target.value })} />
         </div>
+        {isOpenClaw ? <>
+          <div className="adm-field">
+            <label>MCP profile ID</label>
+            <TextField key={'profile:' + (d.profileUid || '')} defaultValue={d.profileUid || ''} placeholder="Account ID from Settings → Account" autoCapitalize="none" autoCorrect="off"
+              onBlur={e => e.target.value !== (d.profileUid || '') && patch({ profileUid: e.target.value.trim() })} />
+          </div>
+          <div className="adm-hint">Must match the bridge's profile and the MCP server's OPENGYM_UID. Only this profile may use the gym coach. Sessions are isolated automatically; extra routing headers are not needed.</div>
+        </> : <>
         <div className="adm-hint" style={{ margin: 0 }}>The host is written to the job log, so you can always see where requests went.</div>
         <div className="adm-field">
           <label>Extra headers (optional)</label>
@@ -228,6 +239,7 @@ export default function AdminCoach() {
             }} />
         </div>
         <div className="adm-hint" style={{ margin: 0 }}>One <code>Name: value</code> per line, sent with every request to this endpoint. For gateways that demand routing headers. Never <code>Authorization</code> or <code>Content-Type</code> — those are refused.</div>
+        </>}
       </Step>}
 
       {/* ---------- credential ---------- */}
@@ -254,7 +266,9 @@ export default function AdminCoach() {
             The stored credential can't be decrypted. This usually means <code>./data</code> was restored without its <code>secret</code> file. Add the key again to fix it.
           </div>}
           {authState === 'optional' && <div className="adm-hint">This endpoint works without a key. Add one only if your server asks for it (OpenRouter does; a model on your own network usually does not).</div>}
-          {authState === 'none' && <div className="adm-hint">{meta.setupToken
+          {authState === 'none' && <div className="adm-hint">{isOpenClaw
+            ? 'Paste the restricted gym bridge token supplied by your Linux deployment. Do not paste the OpenClaw gateway token. It is stored encrypted on this server.'
+            : meta.setupToken
             ? 'Paste either a Claude Code setup token (your subscription) or an Anthropic API key (pay per use).'
             : 'Paste an API key from the provider\'s console. It is stored encrypted on this server and sent to the provider only while a job runs.'}</div>}
           <div className="adm-actions">
@@ -268,12 +282,14 @@ export default function AdminCoach() {
       </Step>}
 
       {/* ---------- model ---------- */}
-      <Step n={num()} title="Model" hint={d.model || (meta.defaultModel ? 'default: ' + meta.defaultModel : 'not chosen yet')} done={step4Done} {...stepAt()}>
-        <div className="adm-hint">{meta.http
+      <Step n={num()} title={isOpenClaw ? 'Persona' : 'Model'} hint={d.model || (meta.defaultModel ? 'default: ' + meta.defaultModel : 'not chosen yet')} done={step4Done} {...stepAt()}>
+        <div className="adm-hint">{isOpenClaw
+          ? 'The OpenClaw agent route, normally openclaw/gym-coach. The underlying LLM is configured on Linux. "List models" shows the personas allowed by the gym bridge.'
+          : meta.http
           ? 'Which model the provider should use. "List models" asks the provider for its current list, so nothing here goes stale.'
           : 'Optional. Leave it empty to use the runtime\'s own default.'}</div>
         <div className="adm-field">
-          <label>Model</label>
+          <label>{isOpenClaw ? 'Persona' : 'Model'}</label>
           {models && models.length
             ? <select className="adm-select" value={chosenModel} disabled={busy} onChange={e => patch({ model: e.target.value })}>
               <option value="">{meta.defaultModel ? `Default (${meta.defaultModel})` : 'Pick a model…'}</option>
@@ -339,7 +355,9 @@ export default function AdminCoach() {
           </div>
 
           <div className="adm-group-t" style={{ marginTop: 14 }}>Whose account pays</div>
-          <div className="adm-hint">{d.authMode === 'profile'
+          <div className="adm-hint">{isOpenClaw
+            ? 'One gym bridge token for the configured MCP profile only. Other profiles are refused, even though the credential is an API key.'
+            : d.authMode === 'profile'
             ? 'Each profile signs in with their own account.'
             : d.auth?.type === 'apikey' || meta.http
               ? 'One API key for the whole instance: every profile may use the Coach with it, and the daily limits above are what bound the spend.'

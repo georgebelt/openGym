@@ -124,6 +124,11 @@ test('shared caps stop new chat runs without charging duplicate checks', async t
   await assert.rejects(chat.send('alice', input()), e => e.code === 'cap');
   assert.equal(calls.length, 1);
 });
+test('large proposal summaries retain the decision before clipping plan details', () => {
+  const context = store.proposalContext({ id: 'large', kind: 'create', bundle: { summary: '中'.repeat(20000) } }, 'resolved', { dismissed: true });
+  assert.equal(Array.from(context.summary).length, 12000);
+  assert.match(context.summary, /^\{"decision":\{"dismissed":true\}/);
+});
 test('bad output cannot display tools or another conversation, and upstream errors are redacted', async t => {
   await bridge(t, (_req, res, body) => res.end(JSON.stringify({ chat_contract: 1, conversation_id: 'foreign', request_id: body.request_id, message: { role: 'assistant', content: 'private secret' } })));
   await chat.consent('alice', 1); await chat.send('alice', input());

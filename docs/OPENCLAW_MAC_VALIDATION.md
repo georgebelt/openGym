@@ -27,6 +27,18 @@ Linux 合同在实现之前以 `faee2e8f` 推到集成分支，见 `OPENCLAW_CHA
   用于去重，app 显示最近 40 条。忘记/重置/删除账号清理后端记录并中止普通请求。
   OpenClaw/LLM 服务商端历史保留仍由 Linux 管理；未声称清理它们。
 
+- 后续补充大提案截断边界：先保留用户的 accepted/rejected/dismissed 决定，再截断计划内容。
+  `node --test api/test/chat.test.js` 最终 **11/11** 通过（上述全量 617 项之后新增 1 项）。
+- Web 生产构建、mobile 生产构建、Capacitor sync、Xcode Release device archive 均通过。
+  第一次重复构建遇到 CocoaPods clean 拒绝旧 `ios/App/build`；已保留旧归档到 output，
+  并将脚本 archivePath 改为 `output/App.xcarchive`，第二次构建成功。
+- 新 IPA：`frontend/ios/App/output/openGym-1.4.1-26-486e4b88-unsigned.ipa`，
+  **209,916,344 bytes**；版本 1.4.1，build 26，源码标识 486e4b88。
+  SHA-256：`3de2d420b936dfd5003822341bd89e54dea17badca47fe8b4ac2d77705d48896`。
+  已核对 ZIP CRC、Info.plist、App 可执行文件、普通对话路由确实打入 JS，且未签名。
+  后续提案摘要边界修复只影响 Linux 后端，不需要重打客户端。
+  IPA 为本机产物，不提交 200 MB 二进制到 Git；用户按既有 LocalDevVPN 流程签名安装。
+
 仍需 Linux 实现/部署新 bridge 合同，并验证真实模型、只读 MCP 和容器；再用新版 IPA
 做真实设备联调。GitHub Actions 的账户 billing 锁定仍属既有外部限制，本轮未变更账户。
 

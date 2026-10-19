@@ -29,7 +29,8 @@ export function proposalContext(p, status = 'pending', decision = null) {
   return {
     id: String(p.id).slice(0, 80), kind: p.kind, status,
     summary: Array.from(JSON.stringify({
-      proposal: p.bundle || p.proposal || p, decision
+      // The bounded summary must keep the user's choice even when a large plan is clipped.
+      decision, proposal: p.bundle || p.proposal || p
     })).slice(0, 12000).join('')
   };
 }

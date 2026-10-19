@@ -100,3 +100,16 @@ content 非空，最多 32000 Unicode 字符，整个响应最多 1 MiB；不带
   client ID 仅用于断线重试去重。客户端不能选择会话或改 proposal_context。
 - 合同假 bridge 测试、UI 检查、语言包和 API 文档、新 IPA。实际 OpenClaw/MCP 和容器
   由 Linux 验证；Mac 测试通过不代表服务器已经部署。
+
+
+## Mac 交付状态（2026-10-19 追加）
+
+App/API 已推到集成分支，主功能提交 `3bbc4dfd`；IPA 构建脚本修复 `486e4b88`。
+请 merge **最新** 集成分支以取得后续边界修复和构建记录。不要把本地 mock 通过
+标为真实 OpenClaw 通过。Linux 剩余范围就是本文开头的五项；原提案阶段 L1 已完成，
+本轮没有新加手机取消/撤回要求。
+
+App 普通请求为 `POST /api/coach/chat/messages`（202），随后轮询
+`GET /api/coach/chat`；首次同意为 `POST /api/coach/chat/consent`（version=1）。
+完整 app API 在 `api/openapi.yaml`。bridge 仍只需本文两个 `/v1/gym/*` 端点。
+新 API 默认沿用现有 `COACH_JOB_TIMEOUT_MS`；部署继续保持 API 480 秒、bridge 470 秒。

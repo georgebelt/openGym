@@ -6,7 +6,9 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 frontend_dir="$repo_dir/frontend"
 ios_dir="$frontend_dir/ios/App"
 output_dir="$ios_dir/output"
-archive_dir="$ios_dir/build/App.xcarchive"
+# CocoaPods runs xcodebuild clean during cap sync. Keep archives outside its build directory:
+# an archive created there by -archivePath makes the next clean refuse the unowned directory.
+archive_dir="$output_dir/App.xcarchive"
 
 for tool in node npm pod xcodebuild ditto shasum; do
   if ! command -v "$tool" >/dev/null 2>&1; then

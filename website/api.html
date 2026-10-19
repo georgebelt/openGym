@@ -245,7 +245,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.1</span>
-    <span>69 endpoints</span>
+    <span>72 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -2092,6 +2092,146 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">401</span>
     <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-getCoachConversation">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/coach/chat</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Bound profile's conversation and chat capability</span>
+  </summary>
+  <div class="ep-body">
+<p>OpenClaw only. Checks bridge chat contract v1 before enabling ordinary conversation. Returns the latest 40 messages (up to 200 retained for retry deduplication), consent, maxMessageLen and the shared cap. A restart marks interrupted messages failed, never automatically replaying an ambiguous upstream call. No internal session, credential, tool trace or request fingerprint is exposed.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Conversation state, including supported=false for an old/unreachable bridge.<span class="r-sig">{ supported: boolean, consent: boolean, maxMessageLen: integer <span class="p-hint">(&ndash;8000)</span>, cap: object, messages: <a href="#schema-CoachChatMessage">CoachChatMessage</a>[] }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Profile does not match the MCP account binding (shared).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">The Coach is not set up on this instance (switched off, or no provider connected). Every Coach route answers this rather than pretending, so an unconfigured instance renders exactly the app it was before the feature existed. <code>code</code> is <code>off</code>, the class a job refused at enqueue for the same reason carries; the app shows its own line for it.<span class="r-sig"><code>{&quot;error&quot;:&quot;the Coach is not set up on this instance&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-consentCoachConversation">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/coach/chat/consent</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Accept the full-history conversation disclosure</span>
+  </summary>
+  <div class="ep-body">
+<p>Server-owned consent, independent of the synced plan questionnaire. Creates the conversation if absent.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">version<em class="p-req" title="required">required</em></span>
+    <span class="p-type">1</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Same conversation state as GET /api/coach/chat.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Unsupported consent version (consent).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Profile binding refusal (shared).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Coach off or bridge chat unavailable (off or unavailable).</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-sendCoachMessage">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/coach/chat/messages</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Enqueue or retrieve an ordinary conversation message</span>
+  </summary>
+  <div class="ep-body">
+<p>clientId is a client UUID v4 retained for an uncertain delivery retry. Same ID/body returns the existing message without charging or rerunning; a changed body returns conflict. The backend chooses the conversation, upstream request ID, profile and current proposal context. Additional fields are rejected. One chat per profile can run concurrently with a structured proposal. Poll GET /api/coach/chat for the result.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">clientId<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(uuid)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">message<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(&le; 8000 chars)</span></span>
+    <span class="p-desc">Also limited by the administrator's maxMessageLen.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">lang</span>
+    <span class="p-type">string <span class="p-hint">(&le; 16 chars, default &quot;en&quot;)</span></span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">202</span>
+    <span class="p-desc">Message accepted or existing result for the same clientId.<span class="r-sig">{ message: <a href="#schema-CoachChatMessage">CoachChatMessage</a> }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid text/ID/language or extra routing fields (invalid).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Conversation disclosure not accepted (consent).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Another message running</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Shared daily budget exhausted (cap).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Coach off or bridge chat unavailable (off or unavailable).</span>
   </div>
     </div>
   </div>
@@ -4496,6 +4636,59 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="p-name">limit</span>
     <span class="p-type">integer</span>
     <span class="p-desc">0 means no per-profile cap.</span>
+  </div>
+</div>
+  </div>
+</details>
+
+<details class="ep sch" id="schema-CoachChatMessage">
+  <summary>
+    <span class="sch-name"><code>CoachChatMessage</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum"></span>
+  </summary>
+  <div class="ep-body">
+
+<div class="ptab">
+  <div class="prow">
+    <span class="p-name">id</span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Server-assigned gymmsg UUID.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">clientId</span>
+    <span class="p-type">string <span class="p-hint">(uuid)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">text</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">at</span>
+    <span class="p-type">integer</span>
+    <span class="p-desc">Submission time in epoch milliseconds.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">state</span>
+    <span class="p-type">&quot;running&quot; | &quot;complete&quot; | &quot;failed&quot;</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">reply</span>
+    <span class="p-type">string | null</span>
+    <span class="p-desc">Final assistant text only.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">error</span>
+    <span class="p-type">&quot;provider&quot; | &quot;timeout&quot; | &quot;unusable&quot; | &quot;restart&quot; | null</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">finishedAt</span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
   </div>
 </div>
   </div>

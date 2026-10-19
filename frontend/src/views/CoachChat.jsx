@@ -24,13 +24,14 @@ import { speedUnitOf } from '../lib/speed.js'
 import { DEMO } from '../lib/demo.js'
 import { MOBILE } from '../lib/mobile.js'
 import {
-  coachAvailable, hasConsent, emptyCoach, appendChat, recordTiming, estimateMs, profileLines,
+  coachAvailable, hasConsent, CONSENT_VERSION, emptyCoach, appendChat, recordTiming, estimateMs, profileLines,
   markStale, applicable, applyChangeSet, applyCreatedPlan, recordDismissal, recordDebrief, logEntry,
   changeTitle, changeValues, exName, canRevert, revertLast
 } from '../lib/coach.js'
 import { insightsFor, sessionInsights } from '../lib/coach-insights.js'
 import { useCoachStatus, requestReview, requestDebrief, requestPlan, refinePlan, resolvePending, cohortStats, setCohortShare, jobErrorText, awaitedJob, settleAwaited, JOB_ERRORS } from '../lib/coach-api.js'
 import { confirmSheet } from '../sheets.jsx'
+import { useConversation, usePlanBrief } from '../lib/coach-conversation.js'
 import Icon from '../components/Icon.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 import LineChart from '../components/LineChart.jsx'
@@ -38,6 +39,12 @@ import { Button, Check, Switch, Section, Row, SelectRow } from '../components/ui
 import '../coach.css'
 
 export default function CoachChat() {
+  const uid = useStore(s => s.user?.id)
+  const server = useStore(s => s.sync?.server)
+  return <CoachThread key={`${server || ''}:${uid || ''}`} scope={`${server || ''}:${uid || ''}`} />
+}
+
+function CoachThread({ scope }) {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
@@ -53,16 +60,24 @@ export default function CoachChat() {
   const endRef = useRef(null)
   const prevJob = useRef(null)
   const coachMode = coachLocal?.mode
+  const chatEligible = !!user && config?.coach?.provider === 'openclaw' && !DEMO && !(MOBILE && coachMode !== 'server')
+  const conversation = useConversation(chatEligible, scope)
+  const chatting = chatEligible && conversation.supported
+  const [brief, setBrief] = usePlanBrief(scope)
+  const [planBusy, setPlanBusy] = useState(false)
+  const [planKind, setPlanKind] = useState(() => (S.routines || []).length ? 'review' : 'create')
 
   const ok = coachAvailable(config, user, { demo: DEMO, mobile: MOBILE, coachMode })
-  const ready = ok && hasConsent(S) && !!S.coach?.profile
+  const ready = ok && (chatting || (hasConsent(S) && !!S.coach?.profile))
   // Not before the store has loaded: a cold start straight on #/coach would otherwise read an
   // empty state, decide there is no consent, and bounce a consenting user into the intake.
   useEffect(() => {
     if (!storeReady) return
     if (!ok) nav('/home', { replace: true })
+    else if (chatEligible && conversation.loading) return
+    else if (chatting) return
     else if (!ready) nav('/coach/intake', { replace: true })
-  }, [storeReady, ok, ready])
+  }, [storeReady, ok, ready, chatEligible, conversation.loading, chatting])
 
   // A job that ends is either a proposal, "nothing to change", or a failure. The server tells
   // the client none of that directly — the job simply stops appearing — so the transition is
@@ -94,8 +109,9 @@ export default function CoachChat() {
     })
   }, [job, pending, loading, last?.id])
 
-  useEffect(() => { if (typeof endRef.current?.scrollIntoView === 'function') endRef.current.scrollIntoView({ block: 'end' }) }, [S.coach?.chat?.length, !!job, !!pending])
+  useEffect(() => { if (typeof endRef.current?.scrollIntoView === 'function') endRef.current.scrollIntoView({ block: 'end' }) }, [S.coach?.chat?.length, conversation.messages?.at(-1)?.state, conversation.messages?.length, !!job, !!pending])
 
+  if (chatEligible && conversation.loading) return <div className="narrow chat"><p>{t('Loading…')}</p></div>
   if (!ready) return null
   const coach = S.coach || emptyCoach()
   const community = !!config?.coach?.community && !DEMO && !(MOBILE && coachMode === 'byok')
@@ -103,8 +119,15 @@ export default function CoachChat() {
   const send = async () => {
     const msg = text.trim()
     if (!msg || busy) return
+    if (chatEligible && (!chatting || !conversation.available || conversation.outbox || conversation.sending || conversation.messages.some(m => m.state === 'running'))) return
+    if (!chatting && job) return
     setBusy(true)
     try {
+      if (chatting) {
+        await conversation.send(msg)
+        setText('')
+        return
+      }
       // A message about a proposed plan refines it. With no plan at all — the first attempt
       // failed, or nothing was ever built — the message asks for one; a review would only
       // answer that there is no workout to look at, which is how people got stuck.
@@ -117,10 +140,34 @@ export default function CoachChat() {
       // A server that refuses the job says so in English, with its class beside it: the class
       // picks the translated line. One with no line here ('shared') keeps the server's words.
       toast(JOB_ERRORS[e.data?.code] || e.message || t('Could not ask the Coach'))
-    }
-    setBusy(false)
+    } finally { setBusy(false) }
   }
 
+  const openBrief = kind => {
+    setPlanKind(kind || (pending?.kind === 'create' || !(S.routines || []).length ? 'create' : 'review'))
+    if (brief === null) setBrief(conversation.messages.filter(m => m.text).slice(-3).map(m => m.text).join('\n').slice(0, maxMessageLen || 1000))
+  }
+  const generate = async () => {
+    if (!brief?.trim() || planBusy || job) return
+    setPlanBusy(true)
+    try {
+      await useStore.getState().pushState?.()
+      if (planKind === 'create') await refinePlan(brief.trim())
+      else await requestReview(brief.trim())
+      update(s => appendChat(s, { role: 'user', kind: 'text', text: t('Plan requirements: {0}', brief.trim()) }))
+      setBrief(null)
+      refresh()
+    } catch (e) { toast(JOB_ERRORS[e.data?.code] || e.message || t('Could not ask the Coach')) }
+    finally { setPlanBusy(false) }
+  }
+  const agreeChat = async () => {
+    setBusy(true)
+    try {
+      await conversation.agree()
+      update(s => { s.coach = { ...(s.coach || emptyCoach()), consent: { agreedAt: new Date().toISOString(), version: CONSENT_VERSION } } })
+    } catch { toast(t('Could not ask the Coach')) }
+    finally { setBusy(false) }
+  }
   const ask = async (fn, line) => {
     setBusy(true)
     try {
@@ -161,7 +208,7 @@ export default function CoachChat() {
       {idle && !!(S.routines || []).length && <Row icon="wrench" iconTint="var(--orange)" title={t('Improve a routine')} subtitle={t('Pick one; the Coach works on just that')} accessory="chevron" onClick={() => { close(); pickRoutine() }} />}
       {community && <Row icon="person" iconTint="var(--teal)" title={t('Compare with others here')} subtitle={t('Anonymous medians from this instance')} accessory="chevron" onClick={() => { close(); showCohort() }} />}
       <Row icon="history" iconTint="var(--blue)" title={t('Everything the Coach proposed')} subtitle={t('Plans, suggestions and debriefs, kept')} accessory="chevron" onClick={() => { close(); showHistory() }} />
-      {idle && <Row icon="clipboard" iconTint="var(--indigo)" title={t('Start a new plan')} subtitle={t('A fresh plan from your answers; your workouts stay')} accessory="chevron" onClick={() => { close(); askNewPlan() }} />}
+      {idle && <Row icon="clipboard" iconTint="var(--indigo)" title={t('Start a new plan')} subtitle={t('A fresh plan from your answers; your workouts stay')} accessory="chevron" onClick={() => { close(); chatting ? openBrief('create') : askNewPlan() }} />}
       <Row icon="pencil" iconTint="var(--indigo)" title={t('Edit my answers')} subtitle={t('Goal, days, equipment, limits')} accessory="chevron" onClick={() => closeThenNav(close, '/coach/intake?edit=1')} />
       <Row icon="clock" iconTint="var(--purple)" title={t('Automatic reviews')} subtitle={cadenceLabel(coach)} accessory="chevron" onClick={() => { close(); cadenceSheet(openSheet, update) }} />
       {canRevert(S) && <Row icon="reset" iconTint="var(--blue)" title={t('Undo the last Coach changes')} accessory="chevron" onClick={() => { close(); doRevert() }} />}
@@ -181,7 +228,7 @@ export default function CoachChat() {
   })
 
   const status = job ? t('thinking…') : pending ? t('has a suggestion for you') : t('here when you need it')
-  const placeholder = pending?.kind === 'create'
+  const placeholder = chatting ? t('Message the Coach…') : chatEligible ? t('What should change?') : pending?.kind === 'create'
     ? t('What should change?')
     : job ? t('Coach is thinking…') : t('Message the Coach…')
 
@@ -197,36 +244,75 @@ export default function CoachChat() {
     </div>
 
     <div className="msgs">
-      <Bubble role="coach">{t('Hi, I’m your Coach. I build your plan from your answers and adjust it from what you actually log. Nothing changes until you say so.')}</Bubble>
+      {chatEligible && !conversation.available && <Bubble role="coach">{t('Conversation is temporarily unavailable. Plan suggestions are still available.')}</Bubble>}
+      <Bubble role="coach">{chatting ? t('Let’s talk about your training. When you are ready, generate plan suggestions here. Nothing changes until you apply them.') : t('Hi, I’m your Coach. I build your plan from your answers and adjust it from what you actually log. Nothing changes until you say so.')}</Bubble>
 
-      {(coach.chat || []).map(m => <Message key={m.id} m={m} S={S} profile={coach.profile} openSheet={openSheet} />)}
+      {chatting && !conversation.consent ? <div className="pcard chat-consent">
+        <h2>{t('Before we start')}</h2>
+        <p>{t('The Coach can read your full synced training history through read-only tools. Plan suggestions use a limited training summary and the requirements you confirm.')}</p>
+        <p>{t('Sent to {0}, running on this server under the instance owner’s account.', config?.coach?.providerLabel || t('the configured AI provider'))}</p>
+        <p>{t('Conversation is saved on your server and with its AI provider. You do not need to fill in plan details to chat.')}</p>
+        <Button variant="primary" disabled={busy || !conversation.available} onClick={agreeChat}>{t('I understand, let’s go')}</Button>
+        <Button onClick={() => nav('/plan')}>{t('Not now')}</Button>
+      </div> : <>
+      {[
+        ...(coach.chat || []).map(m => ({ id: m.id, at: m.at, node: <Message m={m} S={S} profile={coach.profile} openSheet={openSheet} /> })),
+        ...(chatting ? conversation.messages.flatMap(m => [
+          { id: m.id, at: m.at, node: <Bubble role="user" at={m.at}>{m.text}</Bubble> },
+          { id: m.id + '-reply', at: m.finishedAt || m.at + 1, node: <Bubble role="coach" kind={m.state === 'failed' ? 'error' : 'text'} at={m.finishedAt}>
+            {m.state === 'running' ? t('Coach is thinking…') : m.reply || jobErrorText(m.error)}
+          </Bubble> }
+        ]) : []),
+        ...(job ? [{ id: job.id, at: job.startedAt, node: <Typing S={S} kind={job.kind} coachLocal={coachLocal} config={config} /> }] : []),
+        ...(pending && !job ? [{ id: pending.id, at: pending.createdAt, node: pending.kind === 'create'
+          ? <PlanCard p={pending} S={S} update={update} toast={toast} nav={nav} refresh={refresh} conversation={chatting} />
+          : pending.kind === 'debrief'
+            ? <DebriefCard p={pending} S={S} update={update} toast={toast} refresh={refresh} />
+            : <ReviewCard p={pending} S={S} update={update} toast={toast} refresh={refresh} /> }] : [])
+      ].sort((a, b) => (a.at || 0) - (b.at || 0)).map(item => <div className="chat-event" key={item.id}>{item.node}</div>)}
 
-      {job && <Typing S={S} kind={job.kind} coachLocal={coachLocal} config={config} />}
+      {chatting && brief !== null && <div className="pcard chat-brief">
+        <h2>{t('Generate plan suggestions')}</h2>
+        <p>{t('Confirm the requirements for this suggestion. Later messages will not change this request.')}</p>
+        {!!(S.routines || []).length && <select className="chat-plan-kind" aria-label={t('Generate plan suggestions')} value={planKind} onChange={e => setPlanKind(e.target.value)}>
+          <option value="review">{t('Review my training')}</option>
+          <option value="create">{t('Start a new plan')}</option>
+        </select>}
+        <textarea aria-label={t('Plan requirements')} rows={4} maxLength={maxMessageLen || 1000} value={brief} onChange={e => setBrief(e.target.value)} />
+        {!coach.profile && <p>{t('Add your goal, schedule and equipment before generating a plan. You can keep chatting without them.')}</p>}
+        {coach.profile
+          ? <Button variant="primary" disabled={planBusy || !!job || !brief.trim()} onClick={generate}>{t('Generate plan suggestions')}</Button>
+          : <Button variant="primary" onClick={() => nav('/coach/intake?edit=1')}>{t('Edit my answers')}</Button>}
+        <Button onClick={() => setBrief(null)}>{t('Not now')}</Button>
+      </div>}
+      {chatting && conversation.outbox && !conversation.sending && <Bubble role="user" kind="error">
+        <p>{conversation.outbox.message}</p>
+        <p>{t('Delivery is not confirmed. Retry checks the same message without sending it twice.')}</p>
+        <Button disabled={busy || conversation.sending} onClick={async () => {
+          try { await conversation.send('', conversation.outbox); setText('') } catch { toast(t('Could not ask the Coach')) }
+        }}>{t('Try again')}</Button>
+      </Bubble>}
+      </>}
 
-      {pending && !job && (pending.kind === 'create'
-        ? <PlanCard p={pending} S={S} update={update} toast={toast} nav={nav} refresh={refresh} />
-        : pending.kind === 'debrief'
-          ? <DebriefCard p={pending} S={S} update={update} toast={toast} refresh={refresh} />
-          : <ReviewCard p={pending} S={S} update={update} toast={toast} refresh={refresh} />)}
-
-      <div ref={endRef} />
+      <div ref={endRef} className="chat-end" />
     </div>
 
-    <div className="composer">
-      {idle && !busy && <div className="chips-row">
+    {(!chatting || conversation.consent) && <div className="composer">
+      {chatting && <div className="chips-row"><button className="qchip" disabled={!!job || planBusy} onClick={() => openBrief()}><Icon name="sparkles" />{t('Generate plan suggestions')}</button></div>}
+      {!chatting && idle && !busy && <div className="chips-row">
         <button className="qchip" onClick={askReview}><Icon name="sparkles" />{t('Review my training')}</button>
         {!!lastWorkout && <button className="qchip" onClick={askDebrief}><Icon name="checkCircle" />{t('Last workout')}</button>}
         {!!(S.routines || []).length && <button className="qchip" onClick={pickRoutine}><Icon name="wrench" />{t('Improve a routine')}</button>}
         {community && <button className="qchip" onClick={showCohort}><Icon name="person" />{t('Compare')}</button>}
       </div>}
       <div className="composer-in">
-        <textarea rows={1} value={text} maxLength={maxMessageLen || 1000} placeholder={placeholder} disabled={!!job}
+        <textarea rows={1} value={text} maxLength={maxMessageLen || 1000} placeholder={placeholder} disabled={chatting ? !conversation.available || !!conversation.outbox : chatEligible || !!job}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-        <button className="send" onClick={send} disabled={!text.trim() || busy || !!job} aria-label={t('Send')}><Icon name="arrowUp" /></button>
+        <button className="send" onClick={send} disabled={!text.trim() || busy || (chatting ? !conversation.available || !!conversation.outbox || conversation.messages.some(m => m.state === 'running') : chatEligible || !!job)} aria-label={t('Send')}><Icon name="arrowUp" /></button>
       </div>
-      {cap?.limit > 0 && <div className="composer-cap">{t('{0} of {1} Coach runs used today', cap.used, cap.limit)}</div>}
-    </div>
+      {(chatting ? conversation.cap : cap)?.limit > 0 && <div className="composer-cap">{t('{0} of {1} Coach runs used today', (chatting ? conversation.cap : cap).used, (chatting ? conversation.cap : cap).limit)}</div>}
+    </div>}
   </div>
 }
 
@@ -296,7 +382,7 @@ function Typing({ S, kind, coachLocal, config }) {
 
 /* ---------------------------------- the plan ---------------------------------- */
 
-function PlanCard({ p, S, update, toast, nav, refresh }) {
+function PlanCard({ p, S, update, toast, nav, refresh, conversation }) {
   const b = p.bundle
   const [tab, setTab] = useState(0)
   const [schedule, setSchedule] = useState(true)
@@ -355,7 +441,7 @@ function PlanCard({ p, S, update, toast, nav, refresh }) {
         <Button onClick={discard}>{t('Discard')}</Button>
       </div>
     </div>
-    <div className="msg-t">{t('Not quite right? Say what to change below and I will revise the whole plan.')}</div>
+    <div className="msg-t">{conversation ? t('Discuss changes below, then generate plan suggestions when ready.') : t('Not quite right? Say what to change below and I will revise the whole plan.')}</div>
   </div>
 }
 

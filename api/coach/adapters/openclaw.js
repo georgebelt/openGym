@@ -21,7 +21,7 @@ function configurationError(cfg, env) {
 
 // Keep the deadline and cancellation attached until the BODY has arrived. The bridge may
 // send headers immediately, then spend minutes waiting for the persona's final answer.
-async function request(cfg, env, path, body, { fetch: fetchImpl = globalThis.fetch, timeoutMs = 20000, signal } = {}) {
+export async function bridgeRequest(cfg, env, path, body, { fetch: fetchImpl = globalThis.fetch, timeoutMs = 20000, signal, mode = 'proposal' } = {}) {
   const error = configurationError(cfg, env);
   if (error) return { ok: false, error };
   const ctl = new AbortController();
@@ -39,8 +39,8 @@ async function request(cfg, env, path, body, { fetch: fetchImpl = globalThis.fet
         'x-opengym-profile-id': optionsFor(cfg).profileUid,
         ...(body ? {
           'content-type': 'application/json',
-          'x-opengym-request-id': body.user,
-          'x-opengym-coach-mode': 'proposal'
+          'x-opengym-request-id': mode === 'chat' ? body.request_id : body.user,
+          'x-opengym-coach-mode': mode
         } : {})
       },
       ...(body ? { body: JSON.stringify(body) } : {})
@@ -80,7 +80,7 @@ const adapter = {
   id: 'openclaw', runtime: OPENCLAW_PROVIDER.runtime, spawns: false, needsRuntime: false,
   baseUrl: cfg => baseUrlFor('openclaw', cfg),
   async models(cfg, env, opts) {
-    const r = await request(cfg, env, '/v1/models', null, opts);
+    const r = await bridgeRequest(cfg, env, '/v1/models', null, opts);
     if (!r.ok) return { ...r, models: [] };
     const models = Array.isArray(r.data?.data)
       ? r.data.data.map(m => m?.id).filter(validCoachPersona) : [];
@@ -97,7 +97,7 @@ const adapter = {
     if (error) return { code: -1, text: '', stderr: error, spawnError: true };
     const chosen = model || OPENCLAW_PROVIDER.defaultModel;
     if (!validCoachPersona(chosen)) return { code: 1, text: '', stderr: 'persona must be openclaw/<agent-id>' };
-    const r = await request(cfg, env, '/v1/chat/completions', {
+    const r = await bridgeRequest(cfg, env, '/v1/chat/completions', {
       model: chosen, stream: false,
       // A fresh ID for every pipeline attempt, including a repair. No persistent conversation
       // or static session header can accidentally mix workouts, profiles or prior answers.

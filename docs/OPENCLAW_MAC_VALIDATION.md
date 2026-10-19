@@ -3,6 +3,34 @@
 日期：2026-10-18。改动前基线：`0299cf5c41268b1715ac0374533f779377911119`。
 环境：macOS、Node 22.23.1；主机时区 Asia/Shanghai。
 
+
+## 2026-10-19：统一对话 app/API
+
+本轮按用户授权新增实际产品功能，不增加仅用于验收的取消/撤回入口。
+Linux 合同在实现之前以 `faee2e8f` 推到集成分支，见 `OPENCLAW_CHAT_CONTRACT.md`。
+
+- API 全量 **617/617** 通过。新增 10 项 conversation 测试，使用真实本地 HTTP 假 bridge：
+  鉴权/profile 拒绝、首次说明同意、稳定会话/服务端 ID、相同请求去重和共享额度、
+  routing/context 注入拒绝、普通消息与提案并发、pending/resolved 引用与选择、旧 bridge
+  回退、非法回复/跨会话输出拒绝、重启不重放、清理后迟到回复不恢复。
+- 前端 `TZ=Asia/Shanghai npm test -- --maxWorkers=4`：**403 文件，5069/5069** 通过。
+  新增 8 项测试覆盖普通消息不触发计划、免问卷聊天、提案期间聊天、编辑后确认生成、
+  断线重试/重进页面保留相同 ID、旧 bridge 不误路由、切换账号拒绝迟到结果、补资料保留要求。
+  Vitest 全量运行有一次 MaxListenersExceededWarning；未发生测试失败。
+- 实际 CoachChat 组件在 Chrome 的本地 HTTP mock 页面通过：首次说明同意 → 中文聊天 →
+  编辑要求 → 生成卡 → 导入到真实客户端 store → 继续聊天；320/390px 无横向溢出、无
+  JS 页面错误。修正了滚动位置，最后一条回复完整位于输入框上方。
+  此项是 UI + 模拟 API 验收，不是真实模型、MCP 或 iPhone 实机验收。
+- 18 locale 包、2269 keys、1781 个源码翻译字符串检查通过；pt-BR 明确提供新增译文，
+  保留既有继承快照。API 文档已重生成，72 端点/31 schemas；Coach assets 无漂移。
+- 新建 `data/coach-chat/` 存放后端会话，权限目录 0700 / 文件 0600；最多保留 200 条
+  用于去重，app 显示最近 40 条。忘记/重置/删除账号清理后端记录并中止普通请求。
+  OpenClaw/LLM 服务商端历史保留仍由 Linux 管理；未声称清理它们。
+
+仍需 Linux 实现/部署新 bridge 合同，并验证真实模型、只读 MCP 和容器；再用新版 IPA
+做真实设备联调。GitHub Actions 的账户 billing 锁定仍属既有外部限制，本轮未变更账户。
+
+
 ## Linux 增量审查（2026-10-19）
 
 - 已在 Mac 集成分支 fast-forward 合入 Linux `af98b466`，新增内容仅为

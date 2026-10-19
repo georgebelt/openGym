@@ -36,12 +36,27 @@ restricted token, then keep persona `openclaw/gym-coach`, **List models**, and *
 The gateway token and the underlying LLM configuration stay on Linux. This provider is
 server-only; it is not offered in the phone's direct API-key picker.
 
-With this deployment, use the app's Coach to create, review or adjust a plan, or debrief a
-workout. Its notes box adds context to that task; suggestions become changes only after you
-approve them. For free-form training questions, use the **gym-coach** conversation in OpenClaw.
-It can read your synced training through the read-only MCP tools; it cannot apply changes to
-your openGym plan. Exercise instructions and demonstrations are available in the app's exercise
-library. These two entry points have separate sessions.
+With a bridge implementing [chat contract v1](OPENCLAW_CHAT_CONTRACT.md), the app has
+one Coach conversation: ordinary messages ask training questions using read-only access to
+synced history. **Generate plan suggestions** opens an editable requirements brief, then the
+existing validated proposal appears in the same conversation. Only applying that card changes
+your plan. No persona selector is shown. Chat can continue while a proposal is being generated;
+later messages do not modify its submitted requirements.
+
+The first conversation visit explains full-history access and server/provider conversation
+storage. Chat does not require the plan questionnaire. New plan generation still uses your
+goal, schedule and equipment. App conversations are separate from other OpenClaw entry points.
+Only the confirmed brief and normal bounded training payload go to the proposal runner.
+Older bridges keep explicit plan actions; ordinary messages remain disabled until the new
+capability is available. Both conversation messages and proposals use the admin's daily caps.
+
+The backend stores up to 200 message records in `data/coach-chat/<uid>.json` for deduplication
+and shows the most recent 40. The stable conversation ID is server-owned. A message accepted
+by the backend continues after the phone leaves the page; the phone polls for completion.
+Unconfirmed delivery can be retried with the same client ID. Completed/failed IDs never
+silently rerun a model call; a new message starts a new request. A server restart marks an
+interrupted message failed. Forget/reset/account deletion clears backend conversation state
+and aborts in-flight chat; retention at the OpenClaw/LLM provider remains a Linux concern.
 
 A model on your own LAN is the compatible endpoint with no key: point it at
 `http://ollama.lan:11434` and pick a model from the list it serves. That is the whole

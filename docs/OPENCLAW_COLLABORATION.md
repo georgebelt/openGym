@@ -125,7 +125,7 @@ Mac 最新测试结果。升级时补记部署 SHA，不再等待用户执行 L2
 
 - **普通对话接入 app（用户已确认 UX 方向）。** 一个教练、一个连续对话界面；
   后台路由到两个 persona，用户不切换。范围、流程和双方工作见
-  [统一教练 UX](OPENCLAW_COACH_UX.md)。这是下一阶段实际产品功能，尚未实现，
+  [统一教练 UX](OPENCLAW_COACH_UX.md)。这是用户授权的新产品功能，Mac app/API 已实现，Linux bridge/部署待完成，
   不是为了补 L2 测试而新增入口，也不能以现有 proposal-only bridge 声称已接通。
 - **Mac：JSON 错误诊断。** `extractJSON` 已支持 Markdown 围栏，已有测试；
   无需再实现一次。更具体的修复提示属于后续改进，须保持校验严格且不记录私人模型原文。
@@ -133,3 +133,16 @@ Mac 最新测试结果。升级时补记部署 SHA，不再等待用户执行 L2
 
 普通对话 UX 属于新增的后续范围；JSON 诊断仍为改进建议。二者不追溯为现有
 提案接入分支的验收条件。
+
+
+## 统一对话：Mac 本轮完成，Linux 接续部署
+
+Mac 已实现 `/api/coach/chat`、`/consent`、`/messages`，使用已发布的 v1 bridge 合同。
+完整路径及错误码见 `api/openapi.yaml`。聊天记录由后端持久化，普通请求和提案共享额度；
+app 只有一个界面，普通输入不会启动计划任务。生成要求可编辑，聊天与提案可并发，
+提案沿用现有确认应用流程。缺少计划资料只影响生成，不影响普通聊天。
+
+Linux 请合入 **最新** `origin/codex/opengym-integration`（包括 Mac 实现，不仅是合同提交），
+按 `OPENCLAW_CHAT_CONTRACT.md` 完成 bridge、测试、镜像构建与部署，记录实际 SHA。
+Mac 没有修改 `deploy/linux/` 或连接真实 Linux；本轮合同测试不能作为真实 MCP 已通过
+的证据。旧 bridge 不宣告能力时，新 app 不会把普通消息送到提案接口。

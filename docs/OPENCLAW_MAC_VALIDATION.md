@@ -4,6 +4,37 @@
 环境：macOS、Node 22.23.1；主机时区 Asia/Shanghai。
 
 
+## 2026-10-19：Linux 集成与 main 合并检查
+
+Linux 分支 `a062b655` 已合入集成分支。反馈已处理：协作文档改为当前分工、完成状态、
+部署步骤；删除 L1/L2 的重复过程论证。手机取消/撤回范围只保留一处结论。
+
+集成修复：恢复被同名函数覆盖的提案校验测试；拒绝额外路由字段和错误上下文类型；
+聊天缓存键及 OpenClaw 会话键绑定 profile；不完整/非最终 SSE 回复按失败处理；
+缓存文件使用 0600、损坏时停止而非清空、运行中记录不被淘汰。旧版无 profile 的
+缓存请求不重放，升级说明已写入协作文档。新测试先复现 6 个失败，修复后通过。
+
+| 本机检查 | 结果 |
+| --- | --- |
+| API `npm test` | 618/618 |
+| 前端 `TZ=Asia/Shanghai npm test -- --maxWorkers=4` | 403 文件，5069/5069 |
+| MCP `TZ=UTC` / `TZ=Asia/Shanghai npm test` | 两次各 95/95 |
+| bridge `python -m pytest -q deploy/linux/bridge/test_gym_bridge.py` | 23/23 |
+| `api/test/gym-bridge-integration.mjs` | 真实 Node handler/adapter → Python bridge → 假 SSE gateway，通过 |
+| API/Coach 生成文件、18 locale/源码翻译键、API/MCP Node 可加载性、diff | 通过 |
+
+跨运行时检查覆盖绑定、首次同意、对话/去重、稳定会话、pending/resolved 引用与选择、
+独立提案通道。已纳入 GitHub Tests 工作流；未来 bridge 单独改动也会触发检查。
+Mac Python 3.14 的验证环境为 aiohttp 3.14.5、pytest 9.1.1、pytest-asyncio 1.4.0。
+前端全量有既有 MaxListenersExceededWarning，无失败。
+
+GitHub Actions 本轮复核仍因账户 billing 锁定而未运行，以上均为本机结果。
+Linux 真实模型/MCP 证据保留在 Linux 报告；main 的 API/web 镜像及本次 bridge 修复
+需由 Linux 升级后记录运行结果。客户端源码未变，继续使用下方 486e4b88 IPA。
+
+以下为此前实现和 IPA 的验证记录。
+
+
 ## 2026-10-19：统一对话 app/API
 
 本轮按用户授权新增实际产品功能，不增加仅用于验收的取消/撤回入口。

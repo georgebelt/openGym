@@ -1,5 +1,9 @@
 # Linux 实施与验收记录:openGym + OpenClaw gym-coach
 
+> 下文是 Linux 各次部署的原始证据。当前集成状态及 main 升级步骤以
+> [协作说明](OPENCLAW_COLLABORATION.md) 为准；§13 的 bridge 已部署，包含新 app/API
+> 的 API/web 镜像和集成修复仍需随 main 升级。
+
 日期:2026-10-18。实施方:Linux coding agent。基线交接分支 `codex/openclaw-gym-coach`
 (`9d74d250`),工作分支 `codex/linux-gym-coach`。真实主机名/地址经私密渠道告知用户,
 本文一律以 `<tailnet-host>` 代替;所有 token 存于 Linux 本机 0600 文件,未进 Git/日志/本文。

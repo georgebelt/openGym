@@ -1,8 +1,7 @@
 # 一个教练，一个连续对话
 
-2026-10-19。状态：用户已授权实施；两端协议见 [普通对话 v1 合同](OPENCLAW_CHAT_CONTRACT.md)。
-Mac 已实现下述 app/API 功能并进行合同与浏览器测试；真实启用仍需 Linux 部署
-新 bridge。旧 IPA 不具备此界面，新 IPA 构建记录见 Mac 验证文档。
+2026-10-19。app/API 与 Linux bridge 已实现。两端协议见
+[普通对话 v1 合同](OPENCLAW_CHAT_CONTRACT.md)，部署状态见[协作说明](OPENCLAW_COLLABORATION.md)。
 
 ## 用户已经确认的方向
 
@@ -10,7 +9,6 @@ Mac 已实现下述 app/API 功能并进行合同与浏览器测试；真实启�
 - app 只有一个“教练”入口、一个连续对话界面。
 - 不显示 persona、agent、proposal、工具权限开关，不要求用户切换模型或运行模式。
 - 不做“聊训练 / 计划建议”双标签；后台执行分工不映射成两个可见教练。
-- 不添加仅为完成测试而存在的取消/撤回功能；此前 L2 的手机步骤仍不适用。
 
 ## 主要使用流程
 
@@ -57,11 +55,8 @@ Mac 已实现下述 app/API 功能并进行合同与浏览器测试；真实启�
 | 从对话转为可编辑的生成要求、沿用提案校验和用户确认应用 | 按指定账号使用只读 MCP，保证会话隔离与真实数据读取 |
 | API/客户端测试、实际 UI 验证、功能接通后的新版 IPA | 实际 OpenClaw 联调、并发/断线行为、部署与运行证据 |
 
-当前 bridge 的 `/v1/chat/completions` 明确拒绝非 `proposal` 模式，因此此功能不能仅靠
-在手机上切换 model 名实现。先明确新增会话协议，再按上述边界实施；不把原提案路由
-直接改成有 MCP 权限的聊天路由。
-
-普通对话通道至少需要以下合同，由 Mac 与 Linux 在实现前对齐：
+普通对话使用 `/v1/gym/chat`，提案使用 `/v1/chat/completions`。路由由服务端处理。
+两端遵守以下合同：
 
 - 请求绑定已认证的 profile、由服务端分配的 conversation ID 和独立 request ID；
   客户端不能指定任意 OpenClaw agent/session 或透传任意路由头。

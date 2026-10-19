@@ -1,20 +1,7 @@
-# 普通对话 v1：Linux 下一步可直接实施的合同
+# 普通对话 v1：openGym / bridge 合同
 
-2026-10-19，用户已授权实施。先合入 `origin/codex/opengym-integration`，然后在
-`codex/linux-gym-coach` 继续工作。不要等 Mac UI 完成再开始。双方工作范围仍按
-[协作说明](OPENCLAW_COLLABORATION.md)；交互按[一个教练，一个连续对话](OPENCLAW_COACH_UX.md)。
-
-## Linux 本轮任务（只改 deploy/linux 和 Linux 运行环境）
-
-1. 为现有 bridge 实现下面两个端点；保留现有 proposal 协议不变。
-2. 更新 `gym-coach` 提示：这是 app 中同一个教练的对话，普通消息不直接改计划。
-   用户要生成/修改计划时，引导同屏“生成计划建议”操作，不提 persona 切换。
-   根据每次请求的 `proposal_context` 区分待确认、已处理的建议；不得声称草稿已应用。
-3. 使用同一账号的九个只读 MCP 工具；不能扩大到 Glass、其他 profile 或写工具。
-4. 补 bridge 合同测试并部署，写入 `docs/OPENCLAW_LINUX_RESULTS.md`：部署 SHA、
-   契约版本、普通中文对话和真实 MCP 读取、续聊、去重、两个通道并发、断连/超时证据。
-   容器构建仍由 Linux 验证。取消/撤回手机步骤继续“不适用”，不要求新测试按钮。
-5. 将提交推送自己的分支供 Mac 集成。Mac 不会直接改 bridge/persona/服务器。
+2026-10-19。app/API 与 Linux bridge 均已实现；部署与后续工作按
+[协作说明](OPENCLAW_COLLABORATION.md)，用户交互按[统一教练 UX](OPENCLAW_COACH_UX.md)。
 
 ## 认证和能力
 
@@ -90,26 +77,20 @@ content 非空，最多 32000 Unicode 字符，整个响应最多 1 MiB；不带
   用户重试同一消息复用原 request ID，不生成第二轮；失败后由 bridge 返回缓存失败，
   如用户仍要再问可以发送一条新消息。v1 不自动重发状态不明的模型请求。
 
-## Mac 本轮交付
-
-- openGym 鉴权后的会话 API、服务器持久化、账号绑定、首次数据说明和同意记录；
-  普通对话不要求先填完整计划问卷。历史有界，账号清理删除本地记录并终止在途请求。
-- 一个 Coach 界面：普通消息、生成要求确认、现有可应用提案卡、后续讨论；不新增 persona
-  切换、不为验收增加取消/撤回控制。聊天与生成可并发，之后的聊天不改变已提交要求。
-- 管理员日额度同时计算聊天和提案；已接受消息由服务端分配 request ID，手机的稳定
-  client ID 仅用于断线重试去重。客户端不能选择会话或改 proposal_context。
-- 合同假 bridge 测试、UI 检查、语言包和 API 文档、新 IPA。实际 OpenClaw/MCP 和容器
-  由 Linux 验证；Mac 测试通过不代表服务器已经部署。
-
-
-## Mac 交付状态（2026-10-19 追加）
-
-App/API 已推到集成分支，主功能提交 `3bbc4dfd`；IPA 构建脚本修复 `486e4b88`。
-请 merge **最新** 集成分支以取得后续边界修复和构建记录。不要把本地 mock 通过
-标为真实 OpenClaw 通过。Linux 剩余范围就是本文开头的五项；原提案阶段 L1 已完成，
-本轮没有新加手机取消/撤回要求。
+## openGym 侧入口
 
 App 普通请求为 `POST /api/coach/chat/messages`（202），随后轮询
 `GET /api/coach/chat`；首次同意为 `POST /api/coach/chat/consent`（version=1）。
-完整 app API 在 `api/openapi.yaml`。bridge 仍只需本文两个 `/v1/gym/*` 端点。
-新 API 默认沿用现有 `COACH_JOB_TIMEOUT_MS`；部署继续保持 API 480 秒、bridge 470 秒。
+完整 app API 在 `api/openapi.yaml`。手机不能指定上游 agent/session 或提案上下文。
+对话记录由后端持久化，普通消息与提案共享管理员日额度。
+
+## 集成验证
+
+```sh
+python -m pytest -q deploy/linux/bridge/test_gym_bridge.py
+GYM_BRIDGE_PYTHON=deploy/linux/bridge/.venv/bin/python node api/test/gym-bridge-integration.mjs
+```
+
+第二项使用真实 openGym handler、Node HTTP adapter、Python bridge 与本地假 SSE gateway，
+检查绑定、首次同意、普通对话/去重、稳定会话、提案引用/处理结果和独立提案通道。
+所有文件和端口均临时创建，不调用生产模型。真实 OpenClaw/MCP 证据由 Linux 记录。

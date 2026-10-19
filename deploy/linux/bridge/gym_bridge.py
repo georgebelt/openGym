@@ -1,8 +1,7 @@
 """openGym ⇄ OpenClaw 受限 gym bridge(合同 docs/OPENCLAW_GYM_COACH_REQUIREMENTS.md §C)。
 
 单文件 aiohttp 服务,宿主 systemd user 单元直跑(同 glass-backend 模式)。
-职责(也是全部职责):把 openGym 的提案调用翻译成对隔离 agent 的一次
-chat-completions 调用。
+职责:将普通对话路由到只读教练会话，将提案路由到隔离 agent。
 
 安全边界:
 - openGym 只知道 bridge token;OpenClaw gateway token 只活在本进程 env。
@@ -11,8 +10,8 @@ chat-completions 调用。
   (gym-coach-proposal:零工具、无记忆注入、空 workspace)——这是 2026.9.33
   版本下"提案调用禁工具/禁记忆"的调用级隔离实现(该版本无请求级开关,
   已在 OPENCLAW_LINUX_RESULTS.md 说明)。
-- 不透传调用方任意 header/工具声明;每请求独立上游 session
-  (agent:<upstream>:opengym:<uuid>),绝不 fallback 到默认会话。
+- 不透传调用方任意 header/工具声明;提案每请求独立 session，普通对话
+  按 profile + conversation 保持稳定 session，绝不 fallback 到默认会话。
 - 幂等:同 request ID + 同内容 → 重放缓存结果,不重跑;同 ID 不同内容 → 409。
 - 客户端断开/超时 → 关闭上游 SSE(= OpenClaw 真正中止生成,glass 实测语义)。
 - 日志只有 request ID、状态、耗时;不记请求/响应正文。
@@ -64,7 +63,7 @@ PC_STATUS = {"pending", "resolved"}
 class ChatStore:
     """聊天去重的持久化(bridge 专属数据目录,不进通用日志)。
 
-    记录 rid -> {h(正文哈希), conv, status: running|done|failed, resp|err}。
+    记录 profile:rid -> {h(正文哈希), conv, status: running|done|failed, resp|err}。
     重启时所有 running 记为 failed(interrupted):中断的请求不自动重放。"""
 
     def __init__(self, path):
@@ -77,8 +76,12 @@ class ChatStore:
                 saved = json.load(f)
             self.data = saved.get("data", {})
             self.order = saved.get("order", [])
-        except Exception:
+        except FileNotFoundError:
             pass
+        # An unreadable ledger must not silently become an empty one: that would replay
+        # calls whose result is merely unavailable. Leave the file intact for recovery.
+        if not isinstance(self.data, dict) or not isinstance(self.order, list):
+            raise ValueError("invalid chat ledger")
         for rec in self.data.values():
             if rec.get("status") == "running":
                 rec["status"] = "failed"
@@ -87,7 +90,9 @@ class ChatStore:
 
     def _flush(self):
         tmp = self.path + ".tmp"
-        with open(tmp, "w") as f:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            os.fchmod(f.fileno(), 0o600)
             json.dump({"data": self.data, "order": self.order}, f,
                       ensure_ascii=False)
         os.replace(tmp, self.path)
@@ -96,11 +101,15 @@ class ChatStore:
         return self.data.get(rid)
 
     def put(self, rid, rec):
-        if rid not in self.data:
-            self.order.append(rid)
-            while len(self.order) > CHAT_DEDUP_KEEP:
-                self.data.pop(self.order.pop(0), None)
         self.data[rid] = rec
+        if rid not in self.order:
+            self.order.append(rid)
+            for old in self.order[:]:
+                if len(self.order) <= CHAT_DEDUP_KEEP:
+                    break
+                if self.data.get(old, {}).get("status") != "running":
+                    self.order.remove(old)
+                    self.data.pop(old, None)
         self._flush()
 
 
@@ -331,13 +340,16 @@ class GymBridge:
     def _validate_chat(body, rid_header):
         if not isinstance(body, dict):
             raise ChatReject(400, "invalid_request")
+        if set(body) - {"chat_contract", "conversation_id", "request_id",
+                        "message", "lang", "proposal_context"}:
+            raise ChatReject(400, "invalid_request")
         if body.get("chat_contract") != CHAT_CONTRACT or \
                 isinstance(body.get("chat_contract"), bool):
             raise ChatReject(400, "invalid_request")
         conv, rid = body.get("conversation_id"), body.get("request_id")
-        if not (isinstance(conv, str) and CHAT_CONV_RE.match(conv)):
+        if not (isinstance(conv, str) and CHAT_CONV_RE.fullmatch(conv)):
             raise ChatReject(400, "invalid_request")
-        if not (isinstance(rid, str) and CHAT_REQ_RE.match(rid)) or \
+        if not (isinstance(rid, str) and CHAT_REQ_RE.fullmatch(rid)) or \
                 rid != rid_header:
             raise ChatReject(400, "invalid_request")
         msg = body.get("message")
@@ -356,8 +368,10 @@ class GymBridge:
             if not (isinstance(pc.get("id"), str) and
                     0 < len(pc["id"]) <= 80):
                 raise ChatReject(400, "invalid_request")
-            if pc.get("kind") not in PC_KINDS or \
-                    pc.get("status") not in PC_STATUS:
+            if not isinstance(pc.get("kind"), str) or \
+                    pc["kind"] not in PC_KINDS or \
+                    not isinstance(pc.get("status"), str) or \
+                    pc["status"] not in PC_STATUS:
                 raise ChatReject(400, "invalid_request")
             if not (isinstance(pc.get("summary"), str) and
                     len(pc["summary"]) <= 12000):
@@ -387,7 +401,12 @@ class GymBridge:
             {"c": conv, "m": msg, "l": lang, "p": pc},
             sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
-        known = self.chat_store.get(rid)
+        key = self._chat_key(rid)
+        known = self.chat_store.get(key)
+        # Older deployments did not record the profile in the ledger. Their cached
+        # answers cannot establish ownership; do not serve or replay those request IDs.
+        if known is None and self.chat_store.get(rid) is not None:
+            return _err(502, "interrupted")
         if known is not None:
             if known["h"] != bh:
                 return _err(409, "conflict")
@@ -399,7 +418,7 @@ class GymBridge:
                                                timeout=UPSTREAM_TIMEOUT_S)
                     except asyncio.TimeoutError:
                         return _err(504, "upstream_timeout")
-                    known = self.chat_store.get(rid)
+                    known = self.chat_store.get(key)
                 else:                        # 理论不可达(重启时已改 failed)
                     return _err(502, "upstream_error")
             self._log(rid, "chat_replay", t0)
@@ -413,7 +432,7 @@ class GymBridge:
         if self.sem.locked():
             return _err(429, "rate_limited")
 
-        self.chat_store.put(rid, {"h": bh, "conv": conv, "status": "running"})
+        self.chat_store.put(key, {"h": bh, "conv": conv, "status": "running"})
         self.chat_inflight[rid] = asyncio.Event()
         self.chat_conv_busy.add(conv)
         try:
@@ -463,8 +482,12 @@ class GymBridge:
         finally:
             self.chat_conv_busy.discard(conv)
 
+    def _chat_key(self, rid):
+        return f"{self.profile_uid}:{rid}"
+
     def _chat_finish(self, rid, resp=None, err=None):
-        rec = self.chat_store.get(rid) or {}
+        key = self._chat_key(rid)
+        rec = self.chat_store.get(key) or {}
         rec["status"] = "done" if resp else "failed"
         if resp:
             rec["resp"] = resp
@@ -472,7 +495,7 @@ class GymBridge:
         else:
             rec["err"] = err
             rec.pop("resp", None)
-        self.chat_store.put(rid, rec)
+        self.chat_store.put(key, rec)
         ev = self.chat_inflight.pop(rid, None)
         if ev:
             ev.set()
@@ -491,35 +514,50 @@ class GymBridge:
         text = "\n\n".join(parts)
         # 稳定会话:绑定 profile 已由 _gate 保证,conv 为 openGym 后端生成的
         # gymchat-UUID;proposal 走 gym-coach-proposal 的独立 session,互不相见
-        session_key = f"agent:gym-coach:opengym:{conv}"
+        session_key = f"agent:gym-coach:opengym:{self.profile_uid}:{conv}"
         body = {"model": "openclaw/gym-coach", "stream": True,
                 "max_tokens": CHAT_MAX_TOKENS,
                 "messages": [{"role": "user", "content": text}]}
         headers = {"Authorization": f"Bearer {self.oc_token}",
                    "x-openclaw-session-key": session_key}
-        full, finish = [], "stop"
+        full, finish, done = [], None, False
+        size, chars = 0, 0
         async with self.session.post(
                 f"{self.oc_url}/v1/chat/completions", json=body,
                 headers=headers) as resp:
             if resp.status != 200:
                 raise UpstreamHTTPError(resp.status)
             async for raw in resp.content:
+                size += len(raw)
+                if size > 1024 * 1024:
+                    raise ValueError("chat stream exceeds limit")
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
                     continue
                 data = line[5:].strip()
                 if data == "[DONE]":
+                    done = True
                     break
                 try:
                     chunk = json.loads(data)
                 except ValueError:
-                    continue
+                    raise ValueError("invalid chat stream")
                 ch = (chunk.get("choices") or [{}])[0]
-                delta = (ch.get("delta") or {}).get("content")
+                delta_obj = ch.get("delta") or {}
+                if delta_obj.get("tool_calls") or delta_obj.get("function_call"):
+                    raise ValueError("chat stream is not a final answer")
+                delta = delta_obj.get("content")
                 if delta:
+                    if not isinstance(delta, str):
+                        raise ValueError("invalid chat content")
+                    chars += len(delta)
+                    if chars > CHAT_MAX_CONTENT:
+                        raise ValueError("chat content exceeds limit")
                     full.append(delta)
                 if ch.get("finish_reason"):
                     finish = ch["finish_reason"]
+        if not done or finish not in ("stop", "length"):
+            raise ValueError("incomplete chat stream")
         return "".join(full), finish
 
     async def h_health(self, request):

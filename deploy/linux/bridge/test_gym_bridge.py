@@ -29,6 +29,7 @@ class FakeUpstream:
         self.hang = False
         self.status = 200
         self.models_status = 200
+        self.done = True
 
     async def h_models(self, request):
         return web.json_response({"object": "list", "data": []},
@@ -51,7 +52,8 @@ class FakeUpstream:
                     "index": 0, "delta": {"content": piece},
                     "finish_reason": self.finish if i == 1 else None
                 }]}).encode() + b"\n\n")
-        await resp.write(b"data: [DONE]\n\n")
+        if self.done:
+            await resp.write(b"data: [DONE]\n\n")
         return resp
 
     def build(self):
@@ -62,7 +64,8 @@ class FakeUpstream:
 
 
 @pytest.fixture
-async def rig():
+async def rig(tmp_path, monkeypatch):
+    monkeypatch.setenv("GYM_BRIDGE_STATE_DIR", str(tmp_path))
     up = FakeUpstream()
     up_client = TestClient(TestServer(up.build()))
     await up_client.start_server()
@@ -72,6 +75,7 @@ async def rig():
     await c.start_server()
     c.up = up
     c.bridge = b
+    c.tmp = tmp_path
     yield c
     await c.close()
     await up_client.close()
@@ -113,7 +117,7 @@ async def test_models_auth_and_health(rig):
 
 
 # ---------- 认证/校验矩阵 ----------
-async def test_chat_validation_matrix(rig):
+async def test_proposal_validation_matrix(rig):
     r0 = rid()
     ok_b, ok_h = chat_body(r0), chat_headers(r0)
     cases = [
@@ -236,10 +240,8 @@ import gym_bridge as gb
 
 
 @pytest.fixture
-async def crig(rig, tmp_path, monkeypatch):
+async def crig(rig):
     """rig + 聊天存储指到临时目录(不碰 /data)。"""
-    rig.bridge.chat_store = gb.ChatStore(str(tmp_path / "chat-dedup.json"))
-    rig.tmp = tmp_path
     yield rig
 
 
@@ -317,7 +319,7 @@ async def test_chat_roundtrip_stable_session(crig):
     h2, body2 = crig.up.calls[1]
     assert body1["model"] == body2["model"] == "openclaw/gym-coach"
     assert h1["x-openclaw-session-key"] == h2["x-openclaw-session-key"] \
-        == f"agent:gym-coach:opengym:{c}"
+        == f"agent:gym-coach:opengym:{crig.bridge.profile_uid}:{c}"
     # 只发当前消息,不重放历史;上下文作为资料注入
     assert "今天练推还是拉?" not in body2["messages"][0]["content"]
     assert "accepted" in body2["messages"][0]["content"]
@@ -358,7 +360,8 @@ async def test_chat_interrupted_marked_failed(crig):
     bh = _h.sha256(json.dumps({"c": c, "m": "hi", "l": "zh", "p": None},
                               sort_keys=True, ensure_ascii=False).encode()
                    ).hexdigest()
-    crig.bridge.chat_store.put(r0, {"h": bh, "conv": c, "status": "running"})
+    crig.bridge.chat_store.put(crig.bridge._chat_key(r0),
+                              {"h": bh, "conv": c, "status": "running"})
     crig.bridge.chat_store = gb.ChatStore(str(crig.tmp / "chat-dedup.json"))
     resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0, "hi"),
                            headers=chat_hdr(r0))
@@ -404,3 +407,88 @@ async def test_chat_truncation_is_error(crig):
     resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
                            headers=chat_hdr(r0))
     assert resp.status == 502 and len(crig.up.calls) == n
+
+
+async def test_chat_rejects_routing_fields_and_invalid_context_types(crig):
+    c, r0 = conv_id(), msg_id()
+    good = chat_req(c, r0)
+    for bad in [
+        {**good, "model": "openclaw/glass"},
+        {**good, "session": "foreign"},
+        {**good, "tools": []},
+        {**good, "conversation_id": c + "\n"},
+        {**good, "proposal_context": {
+            "id": "p", "kind": [], "status": "pending", "summary": "s"}},
+        {**good, "proposal_context": {
+            "id": "p", "kind": "create", "status": {}, "summary": "s"}},
+    ]:
+        response = await crig.post("/v1/gym/chat", json=bad, headers=chat_hdr(r0))
+        assert response.status == 400
+        assert (await response.json())["error"]["code"] == "invalid_request"
+    assert crig.up.calls == []
+
+
+@pytest.mark.parametrize("finish,done", [(None, False), ("stop", False),
+                                        ("tool_calls", True)])
+async def test_chat_incomplete_stream_is_not_a_final_answer(crig, finish, done):
+    crig.up.finish, crig.up.done = finish, done
+    crig.up.reply = "partial answer"
+    c, r0 = conv_id(), msg_id()
+    for _ in range(2):
+        response = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                                  headers=chat_hdr(r0))
+        assert response.status == 502
+        assert "partial answer" not in await response.text()
+    assert len(crig.up.calls) == 1
+
+
+async def test_chat_cache_and_session_are_bound_to_profile(crig):
+    c, r0 = conv_id(), msg_id()
+    crig.up.reply = "first profile private answer"
+    response = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                              headers=chat_hdr(r0))
+    assert response.status == 200
+    first_session = crig.up.calls[0][0]["x-openclaw-session-key"]
+    # Simulate restarting with a different profile binding and the same state directory.
+    crig.bridge.profile_uid = "second-profile"
+    crig.up.reply = "second profile answer"
+    second_headers = {**chat_hdr(r0), "x-opengym-profile-id": "second-profile"}
+    response = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                              headers=second_headers)
+    assert response.status == 200
+    assert (await response.json())["message"]["content"] == "second profile answer"
+    assert len(crig.up.calls) == 2
+    assert crig.up.calls[1][0]["x-openclaw-session-key"] != first_session
+
+
+def test_chat_store_permissions_and_corrupt_store_fail_closed(tmp_path):
+    import stat
+    path = tmp_path / "chat.json"
+    store = gb.ChatStore(str(path))
+    store.put("request", {"status": "done"})
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    path.write_text("{broken")
+    with pytest.raises(json.JSONDecodeError):
+        gb.ChatStore(str(path))
+    assert path.read_text() == "{broken"
+
+
+def test_chat_store_does_not_evict_running_request(tmp_path, monkeypatch):
+    monkeypatch.setattr(gb, "CHAT_DEDUP_KEEP", 2)
+    store = gb.ChatStore(str(tmp_path / "chat.json"))
+    store.put("running", {"status": "running", "h": "keep"})
+    for n in range(5):
+        store.put(str(n), {"status": "done"})
+    assert store.get("running")["h"] == "keep"
+    assert len(store.data) == 2
+
+
+async def test_legacy_unbound_cache_is_not_served_or_replayed(crig):
+    c, r0 = conv_id(), msg_id()
+    crig.bridge.chat_store.put(r0, {
+        "status": "done", "resp": {"message": "old profile private answer"}})
+    response = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                              headers=chat_hdr(r0))
+    assert response.status == 502
+    assert "private answer" not in await response.text()
+    assert crig.up.calls == []

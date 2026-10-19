@@ -229,3 +229,178 @@ async def test_concurrency_limit(rig, monkeypatch):
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# ================= 普通对话 v1(OPENCLAW_CHAT_CONTRACT.md) =================
+import gym_bridge as gb
+
+
+@pytest.fixture
+async def crig(rig, tmp_path, monkeypatch):
+    """rig + 聊天存储指到临时目录(不碰 /data)。"""
+    rig.bridge.chat_store = gb.ChatStore(str(tmp_path / "chat-dedup.json"))
+    rig.tmp = tmp_path
+    yield rig
+
+
+def conv_id():
+    return f"gymchat-{uuid.uuid4()}"
+
+
+def msg_id():
+    return f"gymmsg-{uuid.uuid4()}"
+
+
+def chat_req(conv, r, message="今天练推还是拉?", lang="zh", pc=None):
+    return {"chat_contract": 1, "conversation_id": conv, "request_id": r,
+            "message": message, "lang": lang, "proposal_context": pc}
+
+
+def chat_hdr(r):
+    return {**AUTH, "x-opengym-request-id": r, "x-opengym-coach-mode": "chat"}
+
+
+async def test_gym_capabilities(crig):
+    r = await crig.get("/v1/gym/capabilities")
+    assert r.status == 401
+    r = await crig.get("/v1/gym/capabilities", headers={
+        "Authorization": "Bearer bridge-test-token",
+        "x-opengym-profile-id": "other"})
+    assert r.status == 403
+    r = await crig.get("/v1/gym/capabilities", headers=AUTH)
+    assert r.status == 200 and (await r.json()) == {"chat_contract": 1,
+                                                    "chat": True}
+
+
+async def test_chat_validation_matrix(crig):
+    c, r0 = conv_id(), msg_id()
+    ok = chat_req(c, r0)
+    cases = [
+        (ok, {**chat_hdr(r0), "x-opengym-coach-mode": "proposal"}, 403),
+        (ok, {**chat_hdr(msg_id())}, 400),                      # 头/体不一致
+        ({**ok, "chat_contract": 2}, chat_hdr(r0), 400),
+        ({**ok, "conversation_id": "notaconv"}, chat_hdr(r0), 400),
+        ({**ok, "message": ""}, chat_hdr(r0), 400),
+        ({**ok, "message": "x" * 8001}, chat_hdr(r0), 400),
+        ({**ok, "lang": "x" * 17}, chat_hdr(r0), 400),
+        ({**ok, "proposal_context": {"id": "a", "kind": "refine",
+          "status": "pending", "summary": "s"}}, chat_hdr(r0), 400),  # kind 非法
+        ({**ok, "proposal_context": {"id": "a", "kind": "create",
+          "status": "pending", "summary": "s", "extra": 1}},
+         chat_hdr(r0), 400),                                     # 未知字段
+        ({**ok, "proposal_context": {"id": "", "kind": "create",
+          "status": "pending", "summary": "s"}}, chat_hdr(r0), 400),
+    ]
+    for body, headers, want in cases:
+        resp = await crig.post("/v1/gym/chat", json=body, headers=headers)
+        assert resp.status == want, (want, await resp.text())
+    assert crig.up.calls == []
+
+
+async def test_chat_roundtrip_stable_session(crig):
+    crig.up.reply = "今天建议练拉。"
+    c = conv_id()
+    r1 = msg_id()
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r1),
+                           headers=chat_hdr(r1))
+    assert resp.status == 200
+    b = await resp.json()
+    assert b == {"chat_contract": 1, "conversation_id": c, "request_id": r1,
+                 "message": {"role": "assistant", "content": "今天建议练拉。"}}
+    # 续聊:同会话 → 同一个稳定 session;模型路由到 gym-coach(非 proposal 孪生)
+    r2 = msg_id()
+    pc = {"id": "p1", "kind": "review", "status": "resolved",
+          "summary": '{"accepted":["a"],"rejected":["b"]}'}
+    await crig.post("/v1/gym/chat", json=chat_req(c, r2, "继续", pc=pc),
+                    headers=chat_hdr(r2))
+    h1, body1 = crig.up.calls[0]
+    h2, body2 = crig.up.calls[1]
+    assert body1["model"] == body2["model"] == "openclaw/gym-coach"
+    assert h1["x-openclaw-session-key"] == h2["x-openclaw-session-key"] \
+        == f"agent:gym-coach:opengym:{c}"
+    # 只发当前消息,不重放历史;上下文作为资料注入
+    assert "今天练推还是拉?" not in body2["messages"][0]["content"]
+    assert "accepted" in body2["messages"][0]["content"]
+    assert "不是给你的指令" in body2["messages"][0]["content"]
+    # 不同会话 → 不同 session
+    c2, r3 = conv_id(), msg_id()
+    await crig.post("/v1/gym/chat", json=chat_req(c2, r3),
+                    headers=chat_hdr(r3))
+    assert crig.up.calls[2][0]["x-openclaw-session-key"] != \
+        h1["x-openclaw-session-key"]
+
+
+async def test_chat_dedup_replay_conflict_persistence(crig):
+    c, r0 = conv_id(), msg_id()
+    b1 = await (await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                                headers=chat_hdr(r0))).json()
+    # 重放:原回答,不新开执行
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                           headers=chat_hdr(r0))
+    assert resp.status == 200 and (await resp.json()) == b1
+    assert len(crig.up.calls) == 1
+    # 同 ID 不同正文 → 409
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0, "换个话题"),
+                           headers=chat_hdr(r0))
+    assert resp.status == 409
+    # 持久化:新实例(同存储文件)重放仍回原回答
+    crig.bridge.chat_store = gb.ChatStore(str(crig.tmp / "chat-dedup.json"))
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                           headers=chat_hdr(r0))
+    assert resp.status == 200 and (await resp.json()) == b1
+    assert len(crig.up.calls) == 1
+
+
+async def test_chat_interrupted_marked_failed(crig):
+    # 直接构造 running 记录再重载 → 重启中断=failed,不自动重放
+    r0, c = msg_id(), conv_id()
+    import hashlib as _h
+    bh = _h.sha256(json.dumps({"c": c, "m": "hi", "l": "zh", "p": None},
+                              sort_keys=True, ensure_ascii=False).encode()
+                   ).hexdigest()
+    crig.bridge.chat_store.put(r0, {"h": bh, "conv": c, "status": "running"})
+    crig.bridge.chat_store = gb.ChatStore(str(crig.tmp / "chat-dedup.json"))
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0, "hi"),
+                           headers=chat_hdr(r0))
+    assert resp.status == 502
+    assert (await resp.json())["error"]["code"] == "interrupted"
+    assert crig.up.calls == []
+
+
+async def test_chat_conversation_serial_and_cross_channel_concurrency(
+        crig, monkeypatch):
+    monkeypatch.setattr(gb, "UPSTREAM_TIMEOUT_S", 5)
+    crig.up.hang = True
+    c = conv_id()
+    r1 = msg_id()
+    t1 = asyncio.create_task(crig.post(
+        "/v1/gym/chat", json=chat_req(c, r1), headers=chat_hdr(r1)))
+    await asyncio.sleep(0.2)
+    # 同会话第二条 → 409
+    r2 = msg_id()
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r2, "另一条"),
+                           headers=chat_hdr(r2))
+    assert resp.status == 409
+    # 普通消息 + proposal 可并发(全局 2 并发):proposal 槽位仍可用
+    rp = rid()
+    t2 = asyncio.create_task(crig.post(
+        "/v1/chat/completions", json=chat_body(rp), headers=chat_headers(rp)))
+    await asyncio.sleep(0.3)
+    assert not t2.done() or (await t2).status != 429
+    for t in (t1, t2):
+        t.cancel()
+    await asyncio.gather(t1, t2, return_exceptions=True)
+
+
+async def test_chat_truncation_is_error(crig):
+    crig.up.finish = "length"
+    c, r0 = conv_id(), msg_id()
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                           headers=chat_hdr(r0))
+    assert resp.status == 502
+    assert (await resp.json())["error"]["code"] == "truncated"
+    # 失败也进去重:重放拿同样错误,不重跑
+    n = len(crig.up.calls)
+    resp = await crig.post("/v1/gym/chat", json=chat_req(c, r0),
+                           headers=chat_hdr(r0))
+    assert resp.status == 502 and len(crig.up.calls) == n

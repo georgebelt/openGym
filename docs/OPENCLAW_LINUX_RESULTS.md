@@ -200,3 +200,10 @@ app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧
 - **取消/撤回定论**:产品无此入口,不适用;等价能力证据=传输终止(§12+本节断连)、
   job 清理与 consent 门(api/test/jobs.test.js)、绑定拒绝(403)。
 - 部署 SHA 见本提交(bridge 以此提交重启运行);token/会话/训练内容未入库。
+- **端点面审计(用户要求)**:bridge 仅 5 条路由——`/v1/models`(Admin List models)、
+  `/v1/chat/completions`(提案)、`/v1/gym/capabilities`+`/v1/gym/chat`(对话 v1)、
+  `/health`(运维探针,回环+docker 私网)。无任何为"取消/撤回"等不适用场景预留的端点;
+  终止语义由连接断开承担。
+- **请 Mac 顺手清理**:`OPENCLAW_COLLABORATION.md` 中 L1/L2 的过程分析(问题复现、
+  CoachChat 无取消按钮的论证等)已完成历史使命,建议下轮集成时收敛为一行结论,
+  与本文档的清理保持一致(用户要求减少过程性内容)。

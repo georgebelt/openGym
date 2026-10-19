@@ -120,10 +120,8 @@ List models/Test 亦经容器网络实测通过)。
 | 4 | 并发/修复/隔离/取消 | ✅ 并发 429 与真实并发混跑、取消/超时实测终止上游、无记忆串入(§3 证据);修复轮未被真实触发(如实) |
 | 5 | 用户建号 + 手机配对 | ✅(audit: pair.create/pair.ok) |
 | 6 | 手机记录→同步→网页/MCP 可读 | ✅ 同步前 MCP 报无数据、同步后 gym-coach 真实读到该训练与已应用的周计划(读到新值) |
-| 7 | iPhone 真实 Coach 请求/撤回/取消/第二账号拒绝 | 真实 create 已由用户**应用**、review 修复后连续 4 次成功;撤回/取消待用户顺手验证;第二账号拒绝的服务端等价已测(错误 profile 403) |
+| 7 | iPhone 真实 Coach 请求/撤回/取消/第二账号拒绝 | 真实 create 已由用户**应用**、review 修复后连续 4 次成功;取消/撤回:产品无此入口,**不适用**(等价工程能力证据见 §13);第二账号拒绝的服务端等价已测(错误 profile 403) |
 | 8 | 测试与部署验证 | ✅ |
-
-5–7 的用户步骤已私下给出;完成后将在本文追加复核记录。
 
 ## 9. openGym 管理配置(已由用户完成)
 
@@ -171,5 +169,41 @@ app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧
   OPENCLAW_MAC_VALIDATION.md(fixture 日历化后 api 全绿、CI 双时区)。
 - 升级部署 SHA 将在 main 合并后的部署窗口补记(Git 合并与服务器部署分离)。
 
-**L2(手机取消/撤回)仍待用户真机操作**,Linux 侧核验点已就绪:job 状态语义、
-bridge 上游终止(journal 的 client_abort/状态行)、撤回后新请求被拒三项。
+## 13. 普通对话 v1 已实现并部署(2026-10-19,合同 OPENCLAW_CHAT_CONTRACT.md)
+
+- **端点**:`GET /v1/gym/capabilities` → `{"chat_contract":1,"chat":true}`;
+  `POST /v1/gym/chat`(鉴权/profile 绑定同 proposal,另要求 `x-opengym-coach-mode: chat`
+  与 `x-opengym-request-id`=body `request_id`)。proposal 协议未动。
+- **会话**:bridge 由绑定 profile + `conversation_id` 派生稳定 session
+  `agent:gym-coach:opengym:gymchat-<uuid>`,只路由 `gym-coach`(九个只读 MCP 工具,
+  与 proposal 的隔离孪生、Glass、其他 profile 零交集);只发当前消息,连续性由
+  OpenClaw session 承担;`proposal_context` 以"资料非指令"包装注入,
+  resolved 以 summary 的 accepted/rejected/dismissed 为准。
+- **去重**:profile+request_id+正文哈希;完成/失败都持久化(`/data/opengym-bridge/`
+  0700,保留 400≥200 条,不进通用日志);重启时 running→failed(interrupted),
+  不自动重放;同 ID 不同正文 409;单会话同时一条普通消息(第二条 409),
+  与 proposal 共享全局并发 2。超限 429;400/401/403/409/429/502/504 全为通用 error。
+  截断(finish=length)与超长(>32000 字符)一律按错误返回,不冒充完整回答。
+- **persona**:`gym-coach-soul v1.1`——app 内同一教练语义、普通消息不改计划、
+  引导同屏"生成计划建议"(不提 persona 切换)、proposal_context 的 pending/resolved
+  区分、绝不声称草稿已应用。已部署到 workspace。
+- **测试**:bridge 套件 **14/14**(新增 7 条:能力探测、校验矩阵、稳定 session 与
+  跨会话隔离+资料注入断言、去重/409/跨实例持久化、中断=failed 不重放、
+  单会话串行+双通道并发、截断=错误)。
+- **真实验收**(经真实 OpenClaw + Bedrock + 已同步数据):
+  - 中文对话真 MCP 读取:准确答出 2026-10-18"自由训练"、0 动作、时长 37 秒(38.4s);
+  - **续聊**:同会话第二问"刚才那次持续多久"直接答 36979 毫秒(2.9s,未重查)——
+    稳定 session 生效;
+  - 去重重放 0ms 返回原回答;3.0s 断连 → `chat_client_abort`(上游生成即停);
+    chat 断连同时一条 proposal 并发完成(200,3.6s)。
+- **容器**:本轮未改 api/web 镜像,构建与健康检查沿用 §1/§7 的通过记录。
+- **取消/撤回定论**:产品无此入口,不适用;等价能力证据=传输终止(§12+本节断连)、
+  job 清理与 consent 门(api/test/jobs.test.js)、绑定拒绝(403)。
+- 部署 SHA 见本提交(bridge 以此提交重启运行);token/会话/训练内容未入库。
+- **端点面审计(用户要求)**:bridge 仅 5 条路由——`/v1/models`(Admin List models)、
+  `/v1/chat/completions`(提案)、`/v1/gym/capabilities`+`/v1/gym/chat`(对话 v1)、
+  `/health`(运维探针,回环+docker 私网)。无任何为"取消/撤回"等不适用场景预留的端点;
+  终止语义由连接断开承担。
+- **请 Mac 顺手清理**:`OPENCLAW_COLLABORATION.md` 中 L1/L2 的过程分析(问题复现、
+  CoachChat 无取消按钮的论证等)已完成历史使命,建议下轮集成时收敛为一行结论,
+  与本文档的清理保持一致(用户要求减少过程性内容)。

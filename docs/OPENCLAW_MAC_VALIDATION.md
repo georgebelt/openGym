@@ -3,6 +3,20 @@
 日期：2026-10-18。改动前基线：`0299cf5c41268b1715ac0374533f779377911119`。
 环境：macOS、Node 22.23.1；主机时区 Asia/Shanghai。
 
+## Linux 增量审查（2026-10-19）
+
+- 已在 Mac 集成分支 fast-forward 合入 Linux `af98b466`，新增内容仅为
+  `deploy/linux/acceptance/` 两个脚本及 Linux 验收记录。
+- 确认真实模型验收脚本注入 `fetchFor(TIMEOUT_MS)`，默认预算为 480000ms，
+  与生产 job runner 一致。
+- Mac 执行 `FAST=1 node deploy/linux/acceptance/fetch_budget_check.mjs`：**PASS**。
+  假上游延迟 8 秒成功，60 秒预算耗尽后连接关闭，3 秒主动取消后连接关闭。
+  310 秒长等待由 Linux 执行并记录；本次 Mac 没有重复该项。
+- 对当前 app 及已打包 IPA 的源码基线核对发现：没有单次请求取消或授权撤回入口。
+  设置里的“在此手机上关闭教练”不能作为服务器授权撤回；后端 `forget` 仅清理任务
+  记录，也不独立修改已同步的 consent。手机 L2 验收须等待 Mac 补齐客户端和相应
+  后端行为，详见 [协作交接 M1](OPENCLAW_COLLABORATION.md#m1补齐取消--撤回入口再交付新版-ipa)。
+
 ## 集成复验（2026-10-18）
 
 基于 Linux `eae02053`，在 Mac 分支 `codex/opengym-integration` 完成。

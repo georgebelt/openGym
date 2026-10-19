@@ -1,7 +1,7 @@
 # openGym：Mac / Linux 分工与交接
 
-更新：2026-10-18。本轮集成基线为 Linux 分支 `codex/linux-gym-coach` 的
-`eae02053`；Mac 集成分支为 `codex/opengym-integration`。
+更新：2026-10-19。Mac 已拉取 Linux 分支 `codex/linux-gym-coach` 的
+`af98b466`；Mac 集成分支为 `codex/opengym-integration`。
 集成草稿：[PR #1](https://github.com/georgebelt/openGym/pull/1)。
 
 ## 谁负责什么
@@ -32,7 +32,8 @@ persona、凭证或会话。实际 token、主机名和账号资料留在服务�
    双方不重置或强推对方分支，不重复提交对方正在负责的文件。
 3. Linux 如需 Mac 的修复，可把已推送的集成分支普通 merge 到自己的分支，保留提交历史。
    后续 Linux 修复仍推自己的分支，Mac 再集成；避免把整组已有提交重新 cherry-pick。
-4. Mac 维护面向 `main` 的集成 PR。本轮先完成下文 L1，再最终复核并合并。
+4. Mac 维护面向 `main` 的集成 PR。下文 L1 已由 Linux 完成；2026-10-19 核对发现，
+   L2 缺少客户端操作入口，须先完成 M1，不能继续要求用户在现有 IPA 中寻找按钮。
    手机取消/撤回属于真实服务验收，未测时明确保留待办，不写成已通过。
 5. `main` 更新之后，由 Linux 决定部署窗口、备份并构建新版本，记录实际部署 SHA。
    Git 合并与服务器部署是两个独立动作。
@@ -53,7 +54,12 @@ persona、凭证或会话。实际 token、主机名和账号资料留在服务�
 
 ## Linux 下一轮待办
 
-### L1：让长任务验收使用生产环境相同的 fetch（合并前收口）
+### L1：让长任务验收使用生产环境相同的 fetch（已完成）
+
+Linux `af98b466` 已完成以下修复，并添加独立假上游验收脚本。
+Linux 记录了 310 秒等待、预算耗尽和主动取消三项通过；详情见
+[Linux 验收记录 §12](OPENCLAW_LINUX_RESULTS.md#12-l1-收口验收脚本对齐生产-fetch2026-10-18-追加)。
+以下保留问题描述和验收要求，供后续维护参考。
 
 位置：`deploy/linux/acceptance/coach_real_model.mjs` 的 `runPipeline` 调用。
 
@@ -82,6 +88,14 @@ invokeOpts: { env, maxTokens: MAX_TOKENS, fetch: fetchFor(TIMEOUT_MS) }
 
 ### L2：收尾手机端取消 / 撤回
 
+**当前阻塞在 Mac 客户端，依赖下方 M1。** 当前 `CoachChat` 的等待提示和菜单均没有
+取消操作，`coach-api.js` 也没有取消请求接口。`CoachSetup` 的“在此手机关闭教练”
+只切换手机模式并清理手机本地 Coach，服务器模式下不会撤回服务器端授权；
+现有问卷仅提供同意，没有撤回入口。
+
+因此以下是真机验收目标，不是当前 IPA 已经能够执行的点击步骤。Linux 的
+AbortController/断连测试证明传输能取消，不证明 app 已有取消按钮。
+
 用户在 iPhone 各执行一次取消进行中的 Coach 请求、撤回 Coach 授权。Linux 核对：
 
 - job 状态及后续取回结果符合取消/撤回语义，不留下可应用的迟到提案；
@@ -96,6 +110,21 @@ bridge/OpenClaw，Linux 修。真实第二账号 UI 与跨北京时间午夜的�
 
 L1/L2 完成后，Linux 更新自己的验收文档：当前配置为 API 480 秒、bridge 470 秒；
 保留历史失败作为历史记录，明确引用 Mac 最新测试结果。升级时补记部署 SHA。
+
+## 新确认的 Mac 待办
+
+### M1：补齐取消 / 撤回入口，再交付新版 IPA
+
+这是 2026-10-19 对用户操作问题的源码审查结论，尚未实现：
+
+- 取消只针对当前请求，必须能终止服务器任务并丢弃迟到结果，保留授权、训练数据和
+  已有 Coach 历史。不能直接把清理全部 Coach 记录的 `/api/coach/forget` 当取消接口。
+- 撤回授权须同步更新服务器的授权状态，并终止相关任务、清理待确认提案；保留训练
+  数据及重新同意的入口。现有 `/api/coach/forget` 只清理 job 记录，不独立修改已同步
+  profile 的 `consent`，单调这个端点不足以实现“新请求被拒”。
+- UI 在未授权时应引导重新同意；不能要求用户绕过界面提交新请求来观察 403。
+  Linux 用受控 API 验收拒绝未授权请求，用户验证手机不会在未重新同意时启动 Coach。
+- Mac 完成实现、测试和 IPA 打包后提供实际点击步骤；Linux 再配合用户做 L2。
 
 ## 已评估的后续改进
 

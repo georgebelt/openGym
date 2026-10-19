@@ -120,10 +120,8 @@ List models/Test 亦经容器网络实测通过)。
 | 4 | 并发/修复/隔离/取消 | ✅ 并发 429 与真实并发混跑、取消/超时实测终止上游、无记忆串入(§3 证据);修复轮未被真实触发(如实) |
 | 5 | 用户建号 + 手机配对 | ✅(audit: pair.create/pair.ok) |
 | 6 | 手机记录→同步→网页/MCP 可读 | ✅ 同步前 MCP 报无数据、同步后 gym-coach 真实读到该训练与已应用的周计划(读到新值) |
-| 7 | iPhone 真实 Coach 请求/撤回/取消/第二账号拒绝 | 真实 create 已由用户**应用**、review 修复后连续 4 次成功;撤回/取消待用户顺手验证;第二账号拒绝的服务端等价已测(错误 profile 403) |
+| 7 | iPhone 真实 Coach 请求/撤回/取消/第二账号拒绝 | 真实 create 已由用户**应用**、review 修复后连续 4 次成功;取消/撤回:产品无此入口,**不适用**(等价工程能力证据见 §13);第二账号拒绝的服务端等价已测(错误 profile 403) |
 | 8 | 测试与部署验证 | ✅ |
-
-5–7 的用户步骤已私下给出;完成后将在本文追加复核记录。
 
 ## 9. openGym 管理配置(已由用户完成)
 
@@ -171,9 +169,6 @@ app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧
   OPENCLAW_MAC_VALIDATION.md(fixture 日历化后 api 全绿、CI 双时区)。
 - 升级部署 SHA 将在 main 合并后的部署窗口补记(Git 合并与服务器部署分离)。
 
-**L2(手机取消/撤回)仍待用户真机操作**,Linux 侧核验点已就绪:job 状态语义、
-bridge 上游终止(journal 的 client_abort/状态行)、撤回后新请求被拒三项。
-
 ## 13. 普通对话 v1 已实现并部署(2026-10-19,合同 OPENCLAW_CHAT_CONTRACT.md)
 
 - **端点**:`GET /v1/gym/capabilities` → `{"chat_contract":1,"chat":true}`;
@@ -202,7 +197,6 @@ bridge 上游终止(journal 的 client_abort/状态行)、撤回后新请求被�
   - 去重重放 0ms 返回原回答;3.0s 断连 → `chat_client_abort`(上游生成即停);
     chat 断连同时一条 proposal 并发完成(200,3.6s)。
 - **容器**:本轮未改 api/web 镜像,构建与健康检查沿用 §1/§7 的通过记录。
-- **L2 更正(按 Mac 校正)**:手机"中途取消/撤回授权"当前产品**无入口,记为不适用**,
-  不再要求用户执行;等价工程能力已有证据(传输终止=§12+本节断连;job 清理与
-  consent 门=api/test/jobs.test.js;服务端绑定拒绝=错误 profile 403)。
+- **取消/撤回定论**:产品无此入口,不适用;等价能力证据=传输终止(§12+本节断连)、
+  job 清理与 consent 门(api/test/jobs.test.js)、绑定拒绝(403)。
 - 部署 SHA 见本提交(bridge 以此提交重启运行);token/会话/训练内容未入库。

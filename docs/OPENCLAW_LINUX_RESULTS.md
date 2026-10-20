@@ -222,3 +222,20 @@ app 文案/空数据 review 的提示里引导这两种用途的分工;Linux 侧
   重建(含新 CoachChat 前端),`/api/health` ok、18445 入口 200;
   bridge 以合并提交重启,capabilities ok,真实中文聊天经 MCP 读到当前周计划。
 - **实际部署 SHA:分支合并提交 `c6a4cd3d`(= main `c6a4cd3d` + Linux 验收历史)。**
+
+## 15. 真机复现:聊天门控不一致 + 兜底占位符误导(交 Mac,frontend)
+
+用户在新 IPA(含 3bbc4dfd 文案)上把聊天输入当聊天用,实际全部变成 review。
+服务端证据(2026-10-20):40h 内手机 UA 对 `GET /api/coach/chat` 零请求;用户在
+"给教练留言…"框发送"测试" → `POST /api/coach/review 202`(12:39:32)→ 70s
+nochange(history `trigger:"manual"`);期间 `/api/coach/status` 以 3-4s 快轮询。
+
+代码定位(均 frontend/,Mac 辖区):
+1. **门控不一致**:`coach-api.js:35` `LOCAL = MOBILE && mode==='byok'`(提案:非 byok
+   即走服务器);`CoachChat.jsx:63` `chatEligible` 却要求 `coachMode === 'server'`
+   严格相等 → 手机 Coach 模式未显式设为 server 时,落入"提案可用、聊天关闭"缝隙。
+2. **兜底占位符误导**:`CoachChat.jsx:231` 占位符链的最后分支(非 chatEligible、
+   无 pending create、无 job)为 `'Message the Coach…'`(中文"给教练留言…"),
+   但该状态下的提交路径是 review——界面承诺聊天、行为是提案。
+建议:两处用同一谓词;非聊天态占位符用 'What should change?' 或禁用聊天语义文案。
+服务端(bridge/API 路由/部署)经核无问题;聊天链路真实验收见 §13。

@@ -239,3 +239,10 @@ nochange(history `trigger:"manual"`);期间 `/api/coach/status` 以 3-4s 快轮�
    但该状态下的提交路径是 review——界面承诺聊天、行为是提案。
 建议:两处用同一谓词;非聊天态占位符用 'What should change?' 或禁用聊天语义文案。
 服务端(bridge/API 路由/部署)经核无问题;聊天链路真实验收见 §13。
+
+§15 补充(13:00 UTC 真机确认):用户手机 Coach 模式原为未设置("已关闭"),
+在 设置→AI 教练 点「使用我自托管的 openGym」后,`GET /api/coach/chat` 15s 轮询即出现,
+随后 `POST /api/coach/chat/messages 202` → bridge `chat_ok 10.4s` 真实回答。
+根因坐实:mode 未设时提案可用(LOCAL 仅排除 byok)而聊天被关,且兜底占位符仍示
+"给教练留言…"。两处修复建议不变;另建议:server 已配 Coach 且用户已配对时,
+考虑默认或引导设 mode='server',避免落入该缝隙。
